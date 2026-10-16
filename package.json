@@ -1,11 +1,12 @@
 {
   "name": "my-pet-buddy-extension",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "description": "Chrome page companion with original frame animations",
   "scripts": {
     "test": "node --test test/*.test.cjs",
-    "test:browser": "node test/browser.cjs"
+    "test:browser": "node test/browser.cjs",
+    "test:desktop": "node test/desktop.cjs"
   },
   "devDependencies": {
     "playwright": "1.62.1"

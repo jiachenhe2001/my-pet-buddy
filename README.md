@@ -1,8 +1,8 @@
 # My Pet Buddy 🐾
 
-## 网页里的小黑桌宠
+## 小黑桌宠：Chrome 与本地桌面双版本
 
-当前版本在原 Chrome 扩展中加入了上传的三组透明 PNG，共 33 帧，保留原始图片。
+Chrome 扩展与 macOS / Windows 桌面版均内置上传的三组透明 PNG，共 33 帧，保留原始图片。两端可以同时使用，各自保存设置。
 
 | 动作 | 素材 |
 | --- | --- |
@@ -34,7 +34,11 @@ npm run test:browser
 
 浏览器冒烟默认加载真实的未打包扩展。只有在仅支持 headless-shell 的测试环境中才使用 `PET_BUDDY_EMULATE_EXTENSION=1`，该模式仅模拟 `chrome.storage` 和 `chrome.runtime.getURL`，用于渲染、交互及同步检查，不替代真实扩展加载验证。CI 使用默认的真实扩展模式。
 
-动作配置见 [`observer.js`](observer.js)，素材说明见 [`pets/observer/README.md`](pets/observer/README.md)。桌面版保留原有功能，新动作目前接入 Chrome 网页扩展。
+**在桌面中使用：**点击菜单栏／系统托盘图标，在面板中选择「小黑 · 动态桌宠」，即可在 Chrome 以外的应用上方显示。隐藏后，可从托盘右键菜单的 **Show Pet** 或面板顶部开关恢复。素材和设置全部本地保存，安装后可断网运行，不自动检查更新。安装包获取及本地运行见 [`desktop/README.md`](desktop/README.md)。
+
+两端复用 [`observer.js`](observer.js) 的动作、播放和拖动逻辑，桌面启动／打包时自动复制共享模块与素材。素材说明见 [`pets/observer/README.md`](pets/observer/README.md)。
+
+下方保留上游项目介绍。**上游商店、Homebrew 和旧 Release 安装包不包含本 fork 的小黑修改**；请按上方说明安装 Chrome 版，或按桌面文档获取本仓库构建的安装包。
 
 ---
 
@@ -151,7 +155,7 @@ Want your pet to walk across your **whole screen**, over every app — not just 
 - 🐾 A pet paces the bottom of your screen, floating over any app (VS Code, browsers, …)
 - 💕 Click the pet for floating hearts, plus periodic motivational messages
 - 🧭 Lives in the **menu bar** (macOS) / **system tray** (Windows) — no window clutter, no close button
-- ⚙️ Pick your pet + theme, settings persist, optional launch-at-login, auto-updates
+- ⚙️ Pick your pet + theme, settings persist, optional launch-at-login, local settings
 
 **Install:** grab the latest `.dmg` (macOS) or `.exe` (Windows) from [Releases](https://github.com/nycanshu/my-pet-buddy/releases). Windows users: see the step-by-step **[Windows install guide](INSTALL-WINDOWS.md)**.
 

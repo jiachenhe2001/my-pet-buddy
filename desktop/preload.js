@@ -6,10 +6,20 @@ contextBridge.exposeInMainWorld('petBuddy', {
     getAll: () => ipcRenderer.invoke('settings:getAll'),
     get: (key) => ipcRenderer.invoke('settings:get', key),
     set: (key, value) => ipcRenderer.invoke('settings:set', { key, value }),
-    onChange: (cb) => ipcRenderer.on('settings:changed', (_e, payload) => cb(payload)),
+    setMany: (values) => ipcRenderer.invoke('settings:setMany', values),
+    onChange: (cb) => {
+      const listener = (_e, payload) => cb(payload);
+      ipcRenderer.on('settings:changed', listener);
+      return () => ipcRenderer.removeListener('settings:changed', listener);
+    },
   },
   overlay: {
     setInteractive: (bool) => ipcRenderer.send('overlay:setInteractive', bool),
+    onCursor: (cb) => {
+      const listener = (_e, point) => cb(point);
+      ipcRenderer.on('overlay:cursor', listener);
+      return () => ipcRenderer.removeListener('overlay:cursor', listener);
+    },
   },
   ui: {
     openSettings: () => ipcRenderer.send('ui:openSettings'),

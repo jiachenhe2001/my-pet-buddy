@@ -16,6 +16,10 @@ class IpcRouter {
       this.store.set(key, value);
       return true;
     });
+    ipcMain.handle('settings:setMany', (_e, values) => {
+      this.store.setMany(values);
+      return true;
+    });
     ipcMain.on('overlay:setInteractive', (_e, bool) => this.overlayManager.setInteractive(bool));
     ipcMain.on('ui:openSettings', () => this.onOpenSettings());
     ipcMain.on('ui:togglePet', () => this.onTogglePet());

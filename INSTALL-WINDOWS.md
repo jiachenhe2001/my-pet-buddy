@@ -10,7 +10,7 @@ It takes about a minute.
 ## 1. Download
 
 Download the installer: **`MyPetBuddy-Setup-<version>.exe`**
-(from whoever shared it with you, or from the [Releases page](https://github.com/nycanshu/my-pet-buddy/releases)).
+(from whoever shared it with you, or from the [Desktop checks 构建的 desktop-windows artifact](https://github.com/jiachenhe2001/my-pet-buddy/actions/workflows/desktop-checks.yml)).
 
 ---
 
@@ -50,7 +50,7 @@ A **Desktop shortcut** and a **Start Menu** entry are created automatically.
 ### Using it
 - **Left-click** the tray icon → opens the little settings popover (choose your pet, position, motion, theme, etc.).
 - **Right-click** the tray icon → quick menu: **Show/Hide Pet**, **Settings**, **Launch at Login**, **Quit**.
-- **Click the pet** on screen → floating hearts 💕.
+- 在面板中选择「小黑 · 动态桌宠」即可使用小黑的全部动作；单击蹦跶，拖动调整位置，右键切换动作。原有宠物仍显示爱心。
 
 ---
 

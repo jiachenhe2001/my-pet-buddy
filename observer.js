@@ -1,4 +1,4 @@
-// Shared by the Chrome content script and popup. Original artwork stays unchanged.
+// Shared by Chrome and Electron. Hosts provide their own asset URLs and storage.
 (function(root) {
     'use strict';
 
@@ -52,10 +52,13 @@
             if (!cache.has(path)) {
                 const promise = new Promise((resolve, reject) => {
                     const image = new Image();
-                    image.crossOrigin = 'anonymous';
+                    const url = getURL(path);
+                    // Electron loads bundled file images from the local origin;
+                    // requesting CORS there makes Chromium reject the file URL.
+                    if (!url.startsWith('file:')) image.crossOrigin = 'anonymous';
                     image.onload = () => resolve(image);
                     image.onerror = () => { cache.delete(path); reject(new Error(`无法加载动作素材：${path}`)); };
-                    image.src = getURL(path);
+                    image.src = url;
                 });
                 cache.set(path, promise);
             }
@@ -191,11 +194,12 @@
         let destroyed = false, autoTimer = null, hintTimer = null, interactionTimer = null, actionToken = 0;
         const player = createPlayer(canvas, (action, mask) => {
             active = action; hit.style.clipPath = mask; layout();
-        });
+        }, callbacks.getURL);
 
         function layout() {
             const rect = placement(active, options.size, position, innerWidth, innerHeight);
             Object.assign(scene.style, { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` });
+            callbacks.onHitAreaChange?.();
             return rect;
         }
         function message(text) {
@@ -235,6 +239,7 @@
             player.setPaused(suspended());
             menu.querySelector('[data-command="pause"]').textContent = options.paused ? '继续动画' : '暂停动画';
             scheduleAuto();
+            callbacks.onHitAreaChange?.();
         }
         function closeMenu() { menu.hidden = true; syncPause(); }
         function openMenu(x, y) {
@@ -326,6 +331,11 @@
         update(initial);
         return {
             update,
+            // Native transparent windows must also pass clicks through the OS.
+            // DOM hit testing respects the animated silhouette's clip-path.
+            isInteractiveAt(x, y) {
+                return !destroyed && (Boolean(drag) || !menu.hidden || document.elementFromPoint(x, y) === host);
+            },
             destroy() {
                 destroyed = true; actionToken++; abort.abort(); clearTimeout(autoTimer); clearTimeout(hintTimer); clearTimeout(interactionTimer);
                 player.destroy(); host.remove();

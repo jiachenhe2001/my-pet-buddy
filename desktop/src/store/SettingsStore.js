@@ -15,11 +15,17 @@ class SettingsStore extends EventEmitter {
   }
 
   set(key, value) {
+    this.setMany({ [key]: value });
+  }
+
+  setMany(values) {
     // No-op if unchanged: avoids redundant writes and a storm of 'change'
     // broadcasts when the settings UI re-saves every key on each interaction.
-    if (this.get(key) === value) return;
-    this._backend.set(key, value);
-    this.emit('change', { key, value });
+    const changes = Object.entries(values).filter(([key, value]) => this.get(key) !== value);
+    // Apply the whole selection before notifying either window. A species change
+    // must not render with the previous pet's variant/action for an IPC roundtrip.
+    for (const [key, value] of changes) this._backend.set(key, value);
+    for (const [key, value] of changes) this.emit('change', { key, value });
   }
 
   getAll() {

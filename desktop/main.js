@@ -7,7 +7,6 @@ const { SettingsWindowManager } = require('./src/windows/SettingsWindowManager')
 const { IpcRouter } = require('./src/ipc/IpcRouter');
 const { TrayController } = require('./src/tray/TrayController');
 const { LaunchAgent } = require('./src/system/LaunchAgent');
-const { UpdaterService } = require('./src/update/UpdaterService');
 
 class AppController {
   constructor() {
@@ -15,7 +14,6 @@ class AppController {
     this.overlay = new OverlayWindowManager();
     this.settingsWindow = new SettingsWindowManager();
     this.launchAgent = new LaunchAgent();
-    this.updater = new UpdaterService();
   }
 
   start() {
@@ -39,8 +37,10 @@ class AppController {
       this.store.on('change', (payload) => {
         const { key, value } = payload;
         // 1) forward every change to the overlay renderer
-        if (this.overlay.win && !this.overlay.win.isDestroyed()) {
-          this.overlay.win.webContents.send('settings:changed', payload);
+        for (const win of [this.overlay.win, this.settingsWindow.win]) {
+          if (win && !win.isDestroyed()) {
+            win.webContents.send('settings:changed', { ...payload, settings: this.store.getAll() });
+          }
         }
         // 2) 'enabled' consistently shows/hides the pet — no matter whether it
         //    was toggled from the tray menu or the popover's header switch.
@@ -74,7 +74,7 @@ class AppController {
       this.launchAgent.set(this.store.get('launchOnLogin'));
       if (this.store.get('enabled')) this.overlay.show(); else this.overlay.hide();
 
-      if (app.isPackaged) this.updater.start();
+      // Local edition: assets/settings are bundled; no automatic update requests.
     });
 
     app.on('window-all-closed', () => {}); // tray-resident; never auto-quit
