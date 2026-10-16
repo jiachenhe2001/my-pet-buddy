@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function applyTheme(theme) {
         document.body.classList.remove('theme-light', 'theme-dark');
         document.body.classList.add(`theme-${theme}`);
-        themeToggleIcon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+        themeToggleIcon.textContent = theme === 'dark' ? '☀' : '☾';
         themeToggleBtn.title = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
     }
 
@@ -43,14 +43,60 @@ document.addEventListener('DOMContentLoaded', function() {
         chrome.storage.sync.set({ 'my-pet-theme': next });
     });
 
-    let selectedCat = 'cat-1'; // Default selection
+    let selectedCat = 'observer';
+    let selectedAction = 'auto';
+    let petSize = 120;
+    let paused = false;
+    const observerPanel = document.getElementById('observer-panel');
+    const observerButton = document.getElementById('select-observer');
+    const sizeInput = document.getElementById('observer-size');
+    const pauseInput = document.getElementById('observer-paused');
+    const actionButtons = document.querySelectorAll('[data-action]');
+    const previewError = document.getElementById('observer-error');
+    const preview = PetBuddyObserver.createPlayer(document.getElementById('observer-preview'));
+
+    function renderObserverControls() {
+        const selected = selectedCat === 'observer';
+        observerPanel.classList.toggle('selected', selected);
+        observerButton.setAttribute('aria-pressed', String(selected));
+        document.getElementById('observer-badge').textContent = selected ? '已选择' : '选择它';
+        document.querySelectorAll('.legacy-controls').forEach(element => { element.hidden = selected; });
+        actionButtons.forEach(button => {
+            const active = button.dataset.action === selectedAction;
+            button.classList.toggle('active', active);
+            button.setAttribute('aria-pressed', String(active));
+        });
+        sizeInput.value = petSize;
+        document.getElementById('observer-size-value').value = String(petSize);
+        pauseInput.checked = paused;
+        preview.setPaused(paused);
+        previewError.hidden = true;
+        preview.setAction(selectedAction === 'auto' ? 'idle' : selectedAction).catch(error => {
+            previewError.textContent = error.message; previewError.hidden = false;
+        });
+    }
+
+    observerButton.addEventListener('click', () => {
+        selectedCat = 'observer'; applySavedSelection(); renderObserverControls(); saveSelections();
+    });
+    actionButtons.forEach(button => button.addEventListener('click', () => {
+        selectedCat = 'observer'; selectedAction = button.dataset.action;
+        applySavedSelection(); renderObserverControls(); saveSelections();
+    }));
+    sizeInput.addEventListener('input', () => { document.getElementById('observer-size-value').value = sizeInput.value; });
+    sizeInput.addEventListener('change', () => { petSize = Number(sizeInput.value); saveSelections(); });
+    pauseInput.addEventListener('change', () => { paused = pauseInput.checked; preview.setPaused(paused); saveSelections(); });
+    document.getElementById('observer-reset').addEventListener('click', () => {
+        chrome.storage.sync.set({ 'my-pet-observer-position': { x: 0.84, y: 0.96 } });
+    });
+    window.addEventListener('pagehide', () => preview.destroy());
     let selectedPosition = 0; // Default position (bottom)
     let selectedMotion = 'parade'; // Default motion mode (left | right | parade)
     let availablePets = []; // Will store detected pets
 
     // Set website link (will be updated when GitHub Pages is enabled)
     if (websiteLink) {
-        websiteLink.href = 'https://nycanshu.github.io/my-pet-buddy';
+        websiteLink.href = 'https://github.com/jiachenhe2001/my-pet-buddy';
     }
 
     // Update logo source to use Chrome extension URL
@@ -185,6 +231,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Add selected class to clicked item
                     this.classList.add('selected');
                     selectedCat = this.dataset.cat;
+                    renderObserverControls();
                     saveSelections();
                 });
                 
@@ -225,11 +272,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Load saved pet selections from storage
     function loadSavedSelections() {
-        chrome.storage.sync.get(['my-pet-selections', 'my-pet-enabled', 'my-pet-y-position', 'my-pet-selected-cat', 'my-pet-motion-mode'], function(result) {
-            const selections = result['my-pet-selections'] || [];
-            const isEnabled = result['my-pet-enabled'] || false;
+        chrome.storage.sync.get(['my-pet-selections', 'my-pet-enabled', 'my-pet-y-position', 'my-pet-selected-cat', 'my-pet-motion-mode', 'my-pet-action', 'my-pet-size', 'my-pet-paused'], function(result) {
+            const selections = result['my-pet-selections'] || ['cat'];
+            const isEnabled = result['my-pet-enabled'] !== false;
             const yPosition = result['my-pet-y-position'] || 0;
-            const savedCat = result['my-pet-selected-cat'] || 'cat-1';
+            const savedCat = result['my-pet-selected-cat'] || 'observer';
             const savedMotion = result['my-pet-motion-mode'] || 'parade';
 
             // Set toggle state
@@ -238,9 +285,14 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 toggle.classList.remove('active');
             }
+            toggle.setAttribute('aria-checked', String(toggle.classList.contains('active')));
 
             // Set selected cat (will be applied when grid is rendered)
             selectedCat = savedCat;
+            selectedAction = PetBuddyObserver.isAction(result['my-pet-action']) ? result['my-pet-action'] : 'auto';
+            petSize = PetBuddyObserver.validSize(result['my-pet-size']);
+            paused = Boolean(result['my-pet-paused']);
+            applySavedSelection(); renderObserverControls();
 
             // Set position
             selectedPosition = yPosition;
@@ -279,6 +331,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Save selected pets to storage
     function saveSelections() {
         const isEnabled = toggle.classList.contains('active');
+        toggle.setAttribute('aria-checked', String(isEnabled));
         const selections = isEnabled ? ['cat'] : [];
 
         // Save to storage. Popup stays open so the user can keep tweaking;
@@ -289,7 +342,10 @@ document.addEventListener('DOMContentLoaded', function() {
             'my-pet-y-position': selectedPosition,
             'my-pet-speed': DEFAULT_SPEED,
             'my-pet-selected-cat': selectedCat,
-            'my-pet-motion-mode': selectedMotion
+            'my-pet-motion-mode': selectedMotion,
+            'my-pet-action': selectedAction,
+            'my-pet-size': petSize,
+            'my-pet-paused': paused
         });
     }
 

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "My Pet Buddy - Virtual Pet Companion",
-  "version": "1.1",
-  "description": "Cute animated pets parade across your browser! Click to pet them, enjoy motivational quotes, and toggle dark mode.",
+  "version": "1.2.0",
+  "description": "网页里的小黑桌宠：待机、蹦跶、滚动、暗中观察和淋雨。支持拖动、互动和记住位置。",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -19,17 +19,17 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["pets.js", "content.js"],
+      "js": ["pets.js", "observer.js", "content.js"],
       "run_at": "document_end"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["pets/*.png", "icons/*.png"],
+      "resources": ["pets/*.png", "pets/observer/*/*.png", "icons/*.png"],
       "matches": ["<all_urls>"]
     }
   ],
   "author": "My Pet Buddy Team",
-  "homepage_url": "https://nycanshu.github.io/my-pet-buddy",
+  "homepage_url": "https://github.com/jiachenhe2001/my-pet-buddy",
   "short_name": "Pet Buddy"
 }

@@ -4,6 +4,7 @@ Thumbs.db
 
 # Dependencies
 node_modules/
+test-results/
 
 # Desktop app build artifacts (generated — not source)
 #   desktop/assets/  is produced by desktop/scripts/copy-assets.js from root pets/ + icons/
