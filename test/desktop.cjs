@@ -14,7 +14,7 @@ async function main() {
     const artifacts = path.join(root, 'test-results', 'desktop');
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'pet-buddy-desktop-'));
     const emulate = process.env.PET_BUDDY_EMULATE_DESKTOP === '1';
-    const errors = [], network = [];
+    const errors = [], network = [], mainLog = [];
     let app, browser, context, popup, overlay;
     execFileSync(process.execPath, [path.join(root, 'desktop/scripts/copy-assets.js')]);
     fs.mkdirSync(artifacts, { recursive: true });
@@ -60,6 +60,8 @@ async function main() {
             app = await electron.launch({ executablePath,
                 args: ['--no-sandbox', path.join(__dirname, 'fixtures/desktop-main.cjs')],
                 env: { ...process.env, PET_BUDDY_TEST_PROFILE: profile }, timeout: 30000 });
+            app.process().stdout.on('data', data => mainLog.push(data.toString()));
+            app.process().stderr.on('data', data => mainLog.push(data.toString()));
             context = app.context();
         }
         const observe = page => {
@@ -77,6 +79,10 @@ async function main() {
                 if (popup && overlay) break;
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
+            if (!popup || !overlay) console.error('Native startup:', await app.evaluate(({ app, BrowserWindow }) => ({
+                ready: app.isReady(), name: app.getName(), path: app.getAppPath(),
+                windows: BrowserWindow.getAllWindows().map(win => ({ url: win.webContents.getURL(), visible: win.isVisible() }))
+            })), mainLog.join(''));
             assert.ok(popup && overlay, 'both native windows opened');
         }
         const front = async page => {
@@ -179,6 +185,7 @@ async function main() {
         console.log(emulate ? 'NOTE: browser-only IPC substitute; native Electron is verified separately in CI.' : 'PASS: real Electron preload, IPC, local storage, and native click-through API');
     } catch (error) {
         console.error('Renderer errors:', errors);
+        if (app) console.error('Main process:', mainLog.join(''));
         if (overlay) {
             console.error(await overlay.locator('body').evaluate(() => ({ host: !!document.querySelector('#my-pet-observer'),
                 canvas: document.querySelector('#my-pet-observer')?.shadowRoot.querySelector('canvas').outerHTML,
