@@ -10,9 +10,7 @@ function copyDir(srcName) {
   const src = path.join(root, srcName);
   const dst = path.join(outDir, srcName);
   fs.mkdirSync(dst, { recursive: true });
-  for (const f of fs.readdirSync(src)) {
-    fs.copyFileSync(path.join(src, f), path.join(dst, f));
-  }
+  fs.cpSync(src, dst, { recursive: true });
   console.log(`copied ${srcName} -> assets/${srcName}`);
 }
 

@@ -1,5 +1,43 @@
 # My Pet Buddy 🐾
 
+## 网页里的小黑桌宠
+
+当前版本在原 Chrome 扩展中加入了上传的三组透明 PNG，共 33 帧，保留原始图片。
+
+| 动作 | 素材 |
+| --- | --- |
+| 暗中观察 | 1-1 ～ 1-11，探头后收回 |
+| 原地蹦跶 | 2-1 ～ 2-5，往返播放 |
+| 滚动 | 2-9 ～ 2-16，往返播放 |
+| 待机 | 2-4、2-5，缓慢交替 |
+| 淋雨 | 3-1 ～ 3-6，顺序循环 |
+
+**在 Chrome 中安装当前项目：**
+
+1. 下载此仓库代码并解压，或运行 `git clone https://github.com/jiachenhe2001/my-pet-buddy.git`。
+2. 打开 `chrome://extensions/`，开启右上角的「开发者模式」。
+3. 点击「加载已解压的扩展程序」，选择包含 `manifest.json` 的项目根目录。
+4. 打开或刷新一个普通 HTTP/HTTPS 网页，新安装时默认显示小黑。已有设置会保留，在扩展面板中选择「小黑 · 动态桌宠」即可切换。
+
+**使用：**单击小猫会蹦跶；拖动小猫可调整位置；右键或聚焦后按 `M` 打开动作菜单。扩展面板可选择动作、调整大小、暂停、重置位置或关闭显示。方向键可移动聚焦的小猫，`Esc` 关闭菜单。动作和位置会保存，其他已打开的网页会同步更新。自动模式在待机间隙随机播放其他动作；页面隐藏时暂停播放。原有静态宠物仍可从下方图库选择。
+
+素材按需预加载，切换动作后才显示新帧，避免闪烁；DOM 和样式放在 Shadow DOM 内，透明留白让网页继续接收点击。所有动画在本地播放，只使用原有的 `storage` 权限。Chrome 内部页面（如 `chrome://extensions/`）不能显示网页桌宠，安装或更新后请刷新普通网页。
+
+**开发检查（Node.js 20+）：**
+
+```bash
+npm ci
+npm test
+npx playwright install chromium
+npm run test:browser
+```
+
+浏览器冒烟默认加载真实的未打包扩展。只有在仅支持 headless-shell 的测试环境中才使用 `PET_BUDDY_EMULATE_EXTENSION=1`，该模式仅模拟 `chrome.storage` 和 `chrome.runtime.getURL`，用于渲染、交互及同步检查，不替代真实扩展加载验证。CI 使用默认的真实扩展模式。
+
+动作配置见 [`observer.js`](observer.js)，素材说明见 [`pets/observer/README.md`](pets/observer/README.md)。桌面版保留原有功能，新动作目前接入 Chrome 网页扩展。
+
+---
+
 **A tiny virtual pet that walks across your screen and keeps you company while you work — now on your browser AND your Mac & Windows desktop.** 🎉
 
 Pick your buddy — cat, dog, bunny, hamster, or birdie — click 'em for a burst of hearts, catch a little motivational nudge when you need it, and let them parade around while you grind. No ads. No sign-up. 100% free and open source. Just vibes. 🐱🐶🐰
@@ -69,7 +107,7 @@ If you want to contribute or test locally:
 
 1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/nycanshu/my-pet-buddy.git
+   git clone https://github.com/jiachenhe2001/my-pet-buddy.git
    cd my-pet-buddy
    ```
 

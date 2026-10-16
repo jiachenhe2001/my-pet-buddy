@@ -19,28 +19,47 @@
         return globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
 
-    // Get pet selections and enabled status from storage
-    chrome.storage.sync.get(['my-pet-selections', 'my-pet-enabled', 'my-pet-y-position', 'my-pet-speed', 'my-pet-selected-cat', 'my-pet-motion-mode', 'my-pet-theme'], function(result) {
-        const selections = result['my-pet-selections'] || [];
-        const isEnabled = result['my-pet-enabled'] || false;
-        const yPosition = result['my-pet-y-position'] || 0;
-        const speed = result['my-pet-speed'] || 10;
-        const selectedCat = result['my-pet-selected-cat'] || 'cat-1';
-        const motionMode = result['my-pet-motion-mode'] || 'parade';
-        currentTheme = resolveTheme(result['my-pet-theme']);
+    const SETTINGS_KEYS = ['my-pet-selections', 'my-pet-enabled', 'my-pet-y-position', 'my-pet-speed',
+        'my-pet-selected-cat', 'my-pet-motion-mode', 'my-pet-theme', 'my-pet-action', 'my-pet-size',
+        'my-pet-paused', 'my-pet-observer-position'];
+    let observer = null;
 
-        if (isEnabled && selections.length > 0) {
-            createPetParade(selections, yPosition, speed, selectedCat, motionMode);
+    function clearPetParade() {
+        clearTimeout(motivationTimerId);
+        motivationTimerId = null;
+        document.getElementById('my-pet-container')?.remove();
+        document.getElementById('my-pet-styles')?.remove();
+        document.querySelectorAll('.my-pet-bubble, .my-pet-heart').forEach(element => element.remove());
+    }
+
+    function renderPets(result) {
+        currentTheme = resolveTheme(result['my-pet-theme']);
+        const enabled = result['my-pet-enabled'] !== false;
+        const selectedCat = result['my-pet-selected-cat'] || 'observer';
+        if (enabled && selectedCat === 'observer') {
+            clearPetParade();
+            const options = { action: result['my-pet-action'], size: result['my-pet-size'],
+                paused: result['my-pet-paused'], position: result['my-pet-observer-position'] ?? null };
+            if (observer) observer.update(options);
+            else observer = PetBuddyObserver.mount(options, {
+                onSettings: settings => chrome.storage.sync.set(settings),
+                onPosition: position => chrome.storage.sync.set({ 'my-pet-observer-position': position })
+            });
+            return;
         }
-    });
+        observer?.destroy(); observer = null;
+        const selections = result['my-pet-selections'] || ['cat'];
+        if (enabled && selections.length > 0) {
+            createPetParade(selections, result['my-pet-y-position'] || 0, result['my-pet-speed'] || 30,
+                selectedCat, result['my-pet-motion-mode'] || 'parade');
+        } else clearPetParade();
+    }
+
+    chrome.storage.sync.get(SETTINGS_KEYS, renderPets);
 
     // Create the pet parade container and pets
     function createPetParade(selections, yPosition, speed, selectedCat, motionMode) {
-        // Remove existing pets if any
-        const existingContainer = document.getElementById('my-pet-container');
-        if (existingContainer) {
-            existingContainer.remove();
-        }
+        clearPetParade();
 
         // Create main container
         const container = document.createElement('div');
@@ -218,6 +237,7 @@
         }
 
         const tick = () => {
+            if (!petEl.isConnected) return;
             showMotivationalMessage(petEl);
             const nextDelay = MOTIVATION_MIN_INTERVAL_MS +
                 Math.random() * (MOTIVATION_MAX_INTERVAL_MS - MOTIVATION_MIN_INTERVAL_MS);
@@ -464,6 +484,7 @@
             let isPaused = false;
 
             const animate = () => {
+                if (!pet.isConnected) return;
                 if (!isPaused) {
                     const elapsed = Date.now() - startTime - totalPauseTime;
                     const progress = (elapsed % (speed * 1000)) / (speed * 1000);
@@ -503,25 +524,8 @@
             currentTheme = resolveTheme(changes['my-pet-theme'].newValue);
         }
 
-        if (changes['my-pet-selections'] || changes['my-pet-enabled'] || changes['my-pet-y-position'] || changes['my-pet-speed'] || changes['my-pet-selected-cat'] || changes['my-pet-motion-mode']) {
-            chrome.storage.sync.get(['my-pet-selections', 'my-pet-enabled', 'my-pet-y-position', 'my-pet-speed', 'my-pet-selected-cat', 'my-pet-motion-mode'], function(result) {
-                const selections = result['my-pet-selections'] || [];
-                const isEnabled = result['my-pet-enabled'] || false;
-                const yPosition = result['my-pet-y-position'] || 0;
-                const speed = result['my-pet-speed'] || 10;
-                const selectedCat = result['my-pet-selected-cat'] || 'cat-1';
-                const motionMode = result['my-pet-motion-mode'] || 'parade';
-
-                if (isEnabled && selections.length > 0) {
-                    createPetParade(selections, yPosition, speed, selectedCat, motionMode);
-                } else {
-                    // Remove pets if disabled
-                    const container = document.getElementById('my-pet-container');
-                    if (container) {
-                        container.remove();
-                    }
-                }
-            });
+        if (SETTINGS_KEYS.some(key => key !== 'my-pet-theme' && changes[key])) {
+            chrome.storage.sync.get(SETTINGS_KEYS, renderPets);
         }
     });
 
