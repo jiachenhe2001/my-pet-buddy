@@ -51,3 +51,22 @@ test('set is a no-op (no emit) when the value is unchanged', () => {
   store.set('species', 'cat');   // real change
   assert.deepStrictEqual(events, [{ key: 'species', value: 'cat' }]);
 });
+
+test('a batch notifies both windows only after the complete animated selection is stored', () => {
+  const backend = fakeBackend({ species: 'dog', variant: 4 });
+  const store = new SettingsStore(backend, DEFAULTS);
+  const selection = { species: 'observer', observerAction: 'roll', observerSize: 150, observerPaused: true,
+    observerPosition: { x: 0.3, y: 0.7 } };
+  const snapshots = [];
+  store.on('change', () => snapshots.push(store.getAll()));
+  store.setMany(selection);
+  assert.strictEqual(snapshots.length, Object.keys(selection).length);
+  for (const snapshot of snapshots) {
+    for (const [key, value] of Object.entries(selection)) assert.deepStrictEqual(snapshot[key], value);
+  }
+  const reopened = new SettingsStore(backend, DEFAULTS);
+  assert.deepStrictEqual(reopened.getAll(), store.getAll());
+  reopened.set('species', 'dog');
+  assert.strictEqual(reopened.get('variant'), 4, 'the old pet selection survives');
+  assert.strictEqual(reopened.get('observerAction'), 'roll');
+});

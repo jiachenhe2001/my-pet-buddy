@@ -20,6 +20,7 @@ class PetWalker {
     this._raf = null;
     this._lastTime = null;
     this._motivationTimer = null;
+    this._clearBubble = null;
     this._onClick = () => this._spawnHearts();
     this.petEl.addEventListener('click', this._onClick);
     this._applyVertical();
@@ -53,8 +54,16 @@ class PetWalker {
   // Called when the pet becomes disabled.
   stop() {
     this.enabled = false;
+    this.petEl.style.display = 'none';
     this._stopWalk();
     if (this._motivationTimer) { clearTimeout(this._motivationTimer); this._motivationTimer = null; }
+    this._clearBubble?.();
+    this.root.querySelectorAll('.pb-heart').forEach(heart => heart.remove());
+  }
+
+  destroy() {
+    this.stop();
+    this.petEl.removeEventListener('click', this._onClick);
   }
 
   // Vertical placement — matches the browser extension exactly: the pet lives in
@@ -168,15 +177,21 @@ class PetWalker {
       bubble.textContent = MESSAGES[Math.floor(Math.random() * MESSAGES.length)];
       this.root.appendChild(bubble);
       let active = true;
+      let frame;
+      const clear = () => {
+        active = false; cancelAnimationFrame(frame); clearTimeout(timeout); bubble.remove();
+        this._clearBubble = null;
+      };
+      const timeout = setTimeout(clear, VISIBLE);
+      this._clearBubble = clear;
       const track = () => {
         if (!active) return;
         const r = this.petEl.getBoundingClientRect();
         bubble.style.left = `${r.left + r.width / 2}px`;
         bubble.style.top = `${r.top - 48}px`;
-        requestAnimationFrame(track);
+        frame = requestAnimationFrame(track);
       };
       track();
-      setTimeout(() => { active = false; bubble.remove(); }, VISIBLE);
       this._motivationTimer = setTimeout(show, MIN + Math.random() * (MAX - MIN));
     };
     this._motivationTimer = setTimeout(show, FIRST);

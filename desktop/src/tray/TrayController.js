@@ -32,8 +32,10 @@ class TrayController {
   _petIcon() {
     const species = this.store.get('species');
     const variant = this.store.get('variant');
-    const petPath = path.join(__dirname, '..', '..', 'assets', 'pets', `${species}-${variant}.png`);
+    const file = species === 'observer' ? 'observer/roll/frame-04.png' : `${species}-${variant}.png`;
+    const petPath = path.join(__dirname, '..', '..', 'assets', 'pets', file);
     let img = nativeImage.createFromPath(petPath);
+    if (species === 'observer' && !img.isEmpty()) img = img.crop({ x: 70, y: 285, width: 360, height: 380 });
     if (img.isEmpty()) {
       img = nativeImage.createFromPath(path.join(__dirname, '..', '..', 'assets', 'icons', 'icon32.png'));
     }

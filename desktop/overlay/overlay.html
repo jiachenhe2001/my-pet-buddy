@@ -2,6 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'" />
   <style>
     html, body {
       margin: 0; padding: 0; width: 100%; height: 100%;
@@ -18,7 +19,7 @@
   </style>
 </head>
 <body>
-  <div id="stage"><img id="pet" alt="pet" /></div>
+  <div id="stage" hidden><img id="pet" alt="pet" /></div>
 
   <style>
     .pb-heart { position: fixed; font-size: 20px; pointer-events: none; z-index: 10; }
@@ -35,73 +36,9 @@
     .pb-bubble.theme-dark { background: #2c3e50; color: #f8f9fa; border-color: #3a4a5e; }
   </style>
 
-  <script src="pets.js"></script>
+  <script src="../assets/observer.js"></script>
   <script src="../src/walker/pacing.js"></script>
   <script src="PetWalker.js"></script>
-  <script>
-    async function boot() {
-      const stage = document.getElementById('stage');
-      const all = await window.petBuddy.settings.getAll();
-      const theme = all.theme === 'system'
-        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-        : all.theme;
-
-      const walker = new PetWalker(stage, {
-        assetBase: '../assets/pets',
-        theme,
-        motivationEnabled: all.motivationEnabled,
-        position: all.position,
-        motionMode: all.motionMode,
-      });
-      walker.setPet(all.species, all.variant);
-      if (all.enabled) walker.start();
-
-      // Click-through except when hovering the pet.
-      // Throttled to ~30fps — no need to hit-test on every single mousemove.
-      const petEl = document.getElementById('pet');
-      let interactive = false;
-      let lastCheck = 0;
-      window.addEventListener('mousemove', (e) => {
-        const now = e.timeStamp;
-        if (now - lastCheck < 33) return;
-        lastCheck = now;
-        const r = petEl.getBoundingClientRect();
-        const over = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-        if (over !== interactive) {
-          interactive = over;
-          window.petBuddy.overlay.setInteractive(over);
-        }
-      });
-
-      // Battery saver: stop animating when the overlay isn't actually visible
-      // (display asleep, screen locked, or fully covered by a fullscreen app).
-      document.addEventListener('visibilitychange', () => {
-        if (document.hidden) walker.suspend();
-        else walker.resume();
-      });
-
-      // Live settings updates.
-      window.petBuddy.settings.onChange(({ key, value }) => {
-        const s = window.__petState = window.__petState || {};
-        s[key] = value;
-        if (key === 'species' || key === 'variant') {
-          walker.setPet(s.species || all.species, s.variant || all.variant);
-        } else if (key === 'enabled') {
-          value ? walker.start() : walker.stop();
-        } else if (key === 'motivationEnabled') {
-          walker.setMotivation(value);
-        } else if (key === 'position') {
-          walker.setPosition(value);
-        } else if (key === 'motionMode') {
-          walker.setMotion(value);
-        } else if (key === 'theme') {
-          walker.setTheme(value === 'system'
-            ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-            : value);
-        }
-      });
-    }
-    boot();
-  </script>
+  <script src="controller.js"></script>
 </body>
 </html>

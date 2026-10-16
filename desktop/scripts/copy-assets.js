@@ -23,3 +23,4 @@ fs.mkdirSync(outDir, { recursive: true });
 copyDir('pets');
 copyDir('icons');
 copyFile('logo.png');
+copyFile('observer.js');

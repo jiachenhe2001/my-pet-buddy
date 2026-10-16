@@ -1,302 +1,111 @@
-// My Pet Buddy - Settings (Desktop) Logic
-// Reused from the extension popup and rewired to the desktop v1 settings schema
-// via the chrome.storage.sync shim in popup.html (which routes to the IPC store).
-//
-// v1 schema keys used here:
-//   enabled (bool), species (cat|dog|rabbit|hamster|bird),
-//   variant (1..6), theme (system|light|dark), motivationEnabled (bool)
+// Local settings facade; both renderers share the original PNG animation player.
+document.addEventListener('DOMContentLoaded', async () => {
+    const api = window.petBuddy;
+    const byId = id => document.getElementById(id);
+    const getURL = path => new URL(`../assets/${path}`, location.href).href;
+    const toggle = byId('my-pet-toggle'), motivation = byId('my-pet-motivation-toggle');
+    const panel = byId('observer-panel'), select = byId('select-observer');
+    const size = byId('observer-size'), paused = byId('observer-paused'), error = byId('observer-error');
+    const media = matchMedia('(prefers-color-scheme: dark)');
+    let settings = await api.settings.getAll(), previewAction = null;
+    const preview = PetBuddyObserver.createPlayer(byId('observer-preview'), () => {}, getURL);
 
-document.addEventListener('DOMContentLoaded', function() {
-    // Get DOM elements
-    const toggle = document.getElementById('my-pet-toggle');
-    const motivationToggle = document.getElementById('my-pet-motivation-toggle');
-    const catGrid = document.getElementById('my-pet-cat-grid');
-    const websiteLink = document.getElementById('website-link');
-    const themeToggleBtn = document.getElementById('theme-toggle');
-    const themeToggleIcon = document.getElementById('theme-toggle-icon');
-
-    // Apply a theme to the popup body and update the icon to reflect the
-    // *next* state (moon = currently light, click to go dark; sun = vice versa)
-    function applyTheme(theme) {
-        document.body.classList.remove('theme-light', 'theme-dark');
-        document.body.classList.add(`theme-${theme}`);
-        themeToggleIcon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-        themeToggleBtn.title = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+    function showError(cause) { error.textContent = cause.message; error.hidden = false; }
+    async function save(changes) {
+        settings = { ...settings, ...changes };
+        render();
+        try { await api.settings.setMany(changes); }
+        catch (cause) { showError(cause); }
     }
-
-    // Initial theme: stored preference, else fall back to OS.
-    // v1 theme may be 'system' | 'light' | 'dark'; treat anything but an
-    // explicit light/dark as "follow OS".
-    chrome.storage.sync.get(['theme'], function(result) {
-        const stored = result['theme'];
-        if (stored === 'dark' || stored === 'light') {
-            applyTheme(stored);
-        } else {
-            const prefersDark = globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches;
-            applyTheme(prefersDark ? 'dark' : 'light');
+    function syncPause() {
+        preview.setPaused(document.hidden || settings.species !== 'observer' || Boolean(settings.observerPaused));
+    }
+    function render() {
+        const isObserver = settings.species === 'observer';
+        const action = PetBuddyObserver.isAction(settings.observerAction) ? settings.observerAction : 'auto';
+        const next = action === 'auto' ? 'idle' : action;
+        toggle.classList.toggle('active', Boolean(settings.enabled));
+        toggle.setAttribute('aria-checked', String(Boolean(settings.enabled)));
+        motivation.classList.toggle('active', Boolean(settings.motivationEnabled));
+        motivation.setAttribute('aria-checked', String(Boolean(settings.motivationEnabled)));
+        panel.classList.toggle('selected', isObserver);
+        select.setAttribute('aria-pressed', String(isObserver));
+        byId('observer-badge').textContent = isObserver ? '已选择' : '选择它';
+        document.querySelectorAll('.legacy-controls').forEach(element => { element.hidden = isObserver; });
+        document.querySelectorAll('button[data-action]').forEach(button => {
+            const active = button.dataset.action === action;
+            button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active));
+        });
+        size.value = PetBuddyObserver.validSize(settings.observerSize);
+        byId('observer-size-value').value = size.value;
+        paused.checked = Boolean(settings.observerPaused);
+        document.querySelectorAll('[data-pos]').forEach(button => button.classList.toggle('active', button.dataset.pos === settings.position));
+        document.querySelectorAll('[data-motion]').forEach(button => button.classList.toggle('active', button.dataset.motion === settings.motionMode));
+        document.querySelectorAll('.my-pet-cat-item').forEach(button => {
+            const active = button.dataset.cat === `${settings.species}-${settings.variant}`;
+            button.classList.toggle('selected', active); button.setAttribute('aria-pressed', String(active));
+        });
+        const logo = document.querySelector('.my-pet-title img');
+        const image = isObserver ? 'pets/observer/roll/frame-04.png' : `pets/${settings.species}-${settings.variant}.png`;
+        if (logo.src !== getURL(image)) logo.src = getURL(image);
+        const theme = ['light', 'dark'].includes(settings.theme) ? settings.theme : (media.matches ? 'dark' : 'light');
+        document.body.classList.toggle('theme-dark', theme === 'dark');
+        document.body.classList.toggle('theme-light', theme === 'light');
+        byId('theme-toggle-icon').textContent = theme === 'dark' ? '☀' : '☾';
+        byId('theme-toggle').title = theme === 'dark' ? '切换浅色模式' : '切换深色模式';
+        syncPause();
+        if (previewAction !== next) {
+            previewAction = next;
+            preview.setAction(next).then(applied => { if (applied) error.hidden = true; }).catch(showError);
         }
+    }
+
+    select.addEventListener('click', () => save({ species: 'observer' }));
+    document.querySelectorAll('button[data-action]').forEach(button => button.addEventListener('click', () => {
+        save({ species: 'observer', observerAction: button.dataset.action });
+    }));
+    size.addEventListener('input', () => { byId('observer-size-value').value = size.value; });
+    size.addEventListener('change', () => save({ observerSize: Number(size.value) }));
+    paused.addEventListener('change', () => save({ observerPaused: paused.checked }));
+    byId('observer-reset').addEventListener('click', () => save({ observerPosition: null }));
+    toggle.addEventListener('click', () => save({ enabled: !settings.enabled }));
+    motivation.addEventListener('click', () => save({ motivationEnabled: !settings.motivationEnabled }));
+    document.querySelectorAll('[data-pos]').forEach(button => button.addEventListener('click', () => save({ position: button.dataset.pos })));
+    document.querySelectorAll('[data-motion]').forEach(button => button.addEventListener('click', () => save({ motionMode: button.dataset.motion })));
+    byId('theme-toggle').addEventListener('click', () => save({ theme: document.body.classList.contains('theme-dark') ? 'light' : 'dark' }));
+    byId('website-link').href = 'https://github.com/jiachenhe2001/my-pet-buddy';
+    document.addEventListener('visibilitychange', syncPause);
+    media.addEventListener('change', render);
+    const unsubscribe = api.settings.onChange(({ key, value, settings: snapshot }) => {
+        settings = snapshot || { ...settings, [key]: value }; render();
     });
+    window.addEventListener('beforeunload', () => { unsubscribe(); preview.destroy(); });
+    render();
 
-    themeToggleBtn.addEventListener('click', function() {
-        const isDark = document.body.classList.contains('theme-dark');
-        const next = isDark ? 'light' : 'dark';
-        applyTheme(next);
-        chrome.storage.sync.set({ 'theme': next });
-    });
-
-    let selectedSpecies = 'cat'; // Default species
-    let selectedVariant = 1;     // Default variant
-    let availablePets = [];      // Will store detected pets
-    let selectedPosition = 'bottom'; // bottom | middle | top
-    let selectedMotion = 'parade';   // parade | left | right
-    const positionControl = document.getElementById('position-control');
-    const motionControl = document.getElementById('motion-control');
-
-    // Convenience: the currently selected pet id, e.g. "cat-1".
-    function selectedPetId() {
-        return `${selectedSpecies}-${selectedVariant}`;
-    }
-
-    // Set website link (will be updated when GitHub Pages is enabled)
-    if (websiteLink) {
-        websiteLink.href = 'https://nycanshu.github.io/my-pet-buddy';
-    }
-
-    // Header logo mirrors the selected pet — a colored PNG that reads well in
-    // both light and dark mode, and matches the menu-bar icon.
-    const logoImg = document.querySelector('.my-pet-title img');
-    function updateHeaderLogo() {
-        if (logoImg) logoImg.src = chrome.runtime.getURL(`pets/${selectedPetId()}.png`);
-    }
-    updateHeaderLogo();
-
-    // Pet types configuration - Add new pet types here
-    const PET_TYPES = ['cat', 'dog', 'bird', 'rabbit', 'hamster'];
-    const MAX_PETS_PER_TYPE = 10; // Maximum pets per type
-
-    // Auto-detect and load pet images
-    detectAndLoadPets();
-
-    // Load saved selections on popup open
-    loadSavedSelections();
-
-    // Auto-detect available pet images
-    function detectAndLoadPets() {
-        availablePets = [];
-        let promises = [];
-
-        // Check for each pet type
-        PET_TYPES.forEach(petType => {
-            for (let i = 1; i <= MAX_PETS_PER_TYPE; i++) {
-                const petId = `${petType}-${i}`;
-                const imagePath = `pets/${petId}.png`;
-
-                // Create a promise for each image check
-                const checkPromise = new Promise((resolve) => {
-                    const testImg = new Image();
-                    testImg.onload = function() {
-                        availablePets.push({
-                            id: petId,
-                            type: petType,
-                            name: `${petType.charAt(0).toUpperCase() + petType.slice(1)} ${i}`,
-                            imagePath: imagePath
-                        });
-                        resolve();
-                    };
-                    testImg.onerror = function() {
-                        resolve(); // Image doesn't exist, continue
-                    };
-                    testImg.src = chrome.runtime.getURL(imagePath);
-                });
-                promises.push(checkPromise);
-            }
-        });
-
-        // Wait for all checks to complete, then render
-        Promise.all(promises).then(() => {
-            // If no pets found, add default cats
-            if (availablePets.length === 0) {
-                for (let i = 1; i <= 4; i++) {
-                    availablePets.push({
-                        id: `cat-${i}`,
-                        type: 'cat',
-                        name: `Cat ${i}`,
-                        imagePath: `pets/cat-${i}.png`
-                    });
-                }
-            }
-            renderPetGrid();
-        });
-    }
-
-    // Render the pet grid dynamically with grouping (single-select)
-    function renderPetGrid() {
-        catGrid.innerHTML = '';
-
-        if (availablePets.length === 0) {
-            return;
+    // Preserve the existing gallery, including additional local numbered pets.
+    const grid = byId('my-pet-cat-grid');
+    for (const species of ['cat', 'dog', 'bird', 'rabbit', 'hamster']) {
+        const candidates = await Promise.all(Array.from({ length: 10 }, (_, i) => {
+            const variant = i + 1, url = getURL(`pets/${species}-${variant}.png`);
+            return new Promise(resolve => {
+                const image = new Image();
+                image.onload = () => resolve({ variant, url }); image.onerror = () => resolve(null); image.src = url;
+            });
+        }));
+        const pets = candidates.filter(Boolean);
+        if (!pets.length) continue;
+        const title = document.createElement('div');
+        title.className = 'my-pet-group-header'; title.textContent = `${species[0].toUpperCase()}${species.slice(1)}s`;
+        const group = document.createElement('div'); group.className = 'my-pet-group';
+        for (const { variant, url } of pets) {
+            const button = document.createElement('button');
+            button.type = 'button'; button.className = 'my-pet-cat-item'; button.dataset.cat = `${species}-${variant}`;
+            const image = document.createElement('img'); image.src = url; image.alt = `${species} ${variant}`; image.className = 'my-pet-cat-image';
+            const name = document.createElement('div'); name.className = 'my-pet-cat-name'; name.textContent = image.alt;
+            button.append(image, name); group.append(button);
+            button.addEventListener('click', () => save({ species, variant }));
         }
-
-        // Group pets by type
-        const groupedPets = {};
-        availablePets.forEach(pet => {
-            if (!groupedPets[pet.type]) {
-                groupedPets[pet.type] = [];
-            }
-            groupedPets[pet.type].push(pet);
-        });
-
-        // Render each pet type group
-        Object.keys(groupedPets).forEach(petType => {
-            const pets = groupedPets[petType];
-
-            // Sort pets by their ID to ensure proper order (cat-1, cat-2, etc.)
-            pets.sort((a, b) => {
-                const aNum = parseInt(a.id.split('-')[1]) || 0;
-                const bNum = parseInt(b.id.split('-')[1]) || 0;
-                return aNum - bNum;
-            });
-
-            // Create group header
-            const groupHeader = document.createElement('div');
-            groupHeader.className = 'my-pet-group-header';
-            groupHeader.textContent = `${petType.charAt(0).toUpperCase() + petType.slice(1)}s`;
-            catGrid.appendChild(groupHeader);
-
-            // Create group container
-            const groupContainer = document.createElement('div');
-            groupContainer.className = 'my-pet-group';
-
-            pets.forEach(pet => {
-                const petItem = document.createElement('div');
-                petItem.className = 'my-pet-cat-item';
-                petItem.dataset.cat = pet.id;
-
-                // Add selected class if this is the saved selection
-                if (pet.id === selectedPetId()) {
-                    petItem.classList.add('selected');
-                }
-
-                petItem.innerHTML = `
-                    <img src="${chrome.runtime.getURL(pet.imagePath)}" alt="${pet.name}" class="my-pet-cat-image">
-                    <div class="my-pet-cat-name">${pet.name}</div>
-                `;
-
-                // Add click handler (single-select: pick one species + variant)
-                petItem.addEventListener('click', function() {
-                    // Remove selected class from all items
-                    document.querySelectorAll('.my-pet-cat-item').forEach(cat => cat.classList.remove('selected'));
-                    // Add selected class to clicked item
-                    this.classList.add('selected');
-                    const [species, variant] = this.dataset.cat.split('-');
-                    selectedSpecies = species;
-                    selectedVariant = parseInt(variant, 10) || 1;
-                    updateHeaderLogo();
-                    saveSelections();
-                });
-
-                groupContainer.appendChild(petItem);
-            });
-
-            catGrid.appendChild(groupContainer);
-        });
+        grid.append(title, group);
     }
-
-    // Enable/disable toggle handler
-    toggle.addEventListener('click', function() {
-        this.classList.toggle('active');
-        saveSelections();
-    });
-
-    // Motivational messages toggle handler
-    motivationToggle.addEventListener('click', function() {
-        this.classList.toggle('active');
-        saveSelections();
-    });
-
-    // Segmented controls (Position + Motion): pick one, mark active, save.
-    function wireSegment(container, key, onPick) {
-        if (!container) return;
-        container.querySelectorAll('.my-pet-position-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                container.querySelectorAll('.my-pet-position-btn').forEach(b => b.classList.remove('active'));
-                this.classList.add('active');
-                onPick(this.dataset[key]);
-            });
-        });
-    }
-    function applySegment(container, key, value) {
-        if (!container) return;
-        container.querySelectorAll('.my-pet-position-btn').forEach(b => {
-            b.classList.toggle('active', b.dataset[key] === value);
-        });
-    }
-    wireSegment(positionControl, 'pos', function(v) { selectedPosition = v; saveSelections(); });
-    wireSegment(motionControl, 'motion', function(v) { selectedMotion = v; saveSelections(); });
-
-    // Load saved selections from storage (v1 schema keys)
-    function loadSavedSelections() {
-        chrome.storage.sync.get(['enabled', 'species', 'variant', 'motivationEnabled', 'position', 'motionMode'], function(result) {
-            const isEnabled = result['enabled'] || false;
-            const species = result['species'] || 'cat';
-            const variant = result['variant'] || 1;
-            const motivationEnabled = result['motivationEnabled'] || false;
-            selectedPosition = result['position'] || 'bottom';
-            selectedMotion = result['motionMode'] || 'parade';
-            applySegment(positionControl, 'pos', selectedPosition);
-            applySegment(motionControl, 'motion', selectedMotion);
-
-            // Set enable toggle state
-            if (isEnabled) {
-                toggle.classList.add('active');
-            } else {
-                toggle.classList.remove('active');
-            }
-
-            // Set motivation toggle state
-            if (motivationEnabled) {
-                motivationToggle.classList.add('active');
-            } else {
-                motivationToggle.classList.remove('active');
-            }
-
-            // Set selected pet (reconstruct id; applied when grid is rendered)
-            selectedSpecies = species;
-            selectedVariant = variant;
-            updateHeaderLogo();
-            applySavedSelection();
-        });
-    }
-
-    // Apply saved selection to rendered grid
-    function applySavedSelection() {
-        const petId = selectedPetId();
-        const catItems = document.querySelectorAll('.my-pet-cat-item');
-        catItems.forEach(item => {
-            if (item.dataset.cat === petId) {
-                item.classList.add('selected');
-            } else {
-                item.classList.remove('selected');
-            }
-        });
-    }
-
-    // Save current selections to storage (v1 schema keys).
-    // Window stays open so the user can keep tweaking; the overlay's
-    // settings:changed listener picks up changes live.
-    function saveSelections() {
-        const isEnabled = toggle.classList.contains('active');
-        const motivationEnabled = motivationToggle.classList.contains('active');
-
-        chrome.storage.sync.set({
-            'enabled': isEnabled,
-            'species': selectedSpecies,
-            'variant': selectedVariant,
-            'motivationEnabled': motivationEnabled,
-            'position': selectedPosition,
-            'motionMode': selectedMotion
-        });
-    }
-
-
+    render();
 });
