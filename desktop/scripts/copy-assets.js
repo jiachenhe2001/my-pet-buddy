@@ -19,8 +19,13 @@ function copyFile(name) {
   console.log(`copied ${name} -> assets/${name}`);
 }
 
+// Remove stale generated pets/modules when upgrading an existing checkout.
+fs.rmSync(outDir, { recursive: true, force: true });
 fs.mkdirSync(outDir, { recursive: true });
 copyDir('pets');
 copyDir('icons');
-copyFile('logo.png');
 copyFile('observer.js');
+
+copyFile('pets.js');
+copyFile('popup-controller.js');
+copyFile('popup.css');

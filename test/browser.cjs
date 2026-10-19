@@ -9,8 +9,15 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 async function main() {
-    const root = path.resolve(__dirname, '..');
-    const artifacts = path.resolve(process.env.PET_BUDDY_ARTIFACTS || path.join(root, 'test-results'));
+    const source = path.resolve(__dirname, '..');
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pet-buddy-extension-'));
+    // Exercise an actual second registered character without shipping test art.
+    for (const file of ['manifest.json', 'pets.js', 'observer.js', 'content.js', 'popup.html', 'popup.js', 'popup-controller.js', 'popup.css', 'icons', 'pets']) {
+        fs.cpSync(path.join(source, file), path.join(root, file), { recursive: true });
+    }
+    fs.cpSync(path.join(source, 'pets/observer'), path.join(root, 'pets/test-character'), { recursive: true });
+    fs.appendFileSync(path.join(root, 'pets.js'), `\n{ const catalog = typeof module !== 'undefined' && module.exports ? module.exports : globalThis.PetBuddyPets; catalog.register({ ...catalog.get(), id: 'test-character', name: '测试形象', assetRoot: 'pets/test-character', thumbnail: 'pets/test-character/roll/frame-04.png' }); }\n`);
+    const artifacts = path.resolve(process.env.PET_BUDDY_ARTIFACTS || path.join(source, 'test-results'));
     fs.mkdirSync(artifacts, { recursive: true });
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'pet-buddy-test-'));
     const emulate = process.env.PET_BUDDY_EMULATE_EXTENSION === '1';
@@ -36,7 +43,7 @@ async function main() {
                         localStorage.setItem(key, JSON.stringify(after)); emit(changes(before, after));
                         if (callback) queueMicrotask(callback); return Promise.resolve();
                     }
-                }, onChanged: { addListener(listener) { listeners.push(listener); } } };
+                }, onChanged: { addListener(listener) { listeners.push(listener); }, removeListener(listener) { const i = listeners.indexOf(listener); if (i >= 0) listeners.splice(i, 1); } } };
                 chrome.runtime = { getURL: path => location.origin + '/' + path.replace(/^\\//, '') };
                 addEventListener('storage', event => { if (event.key === key) emit(changes(JSON.parse(event.oldValue || '{}'), JSON.parse(event.newValue || '{}'))); });
             })();`);
@@ -46,7 +53,7 @@ async function main() {
             const relative = decodeURIComponent(request.url.split('?')[0]).replace(/^\//, '');
             const file = path.resolve(root, relative);
             if (file.startsWith(root + path.sep) && fs.existsSync(file) && fs.statSync(file).isFile()) {
-                response.setHeader('Content-Type', file.endsWith('.png') ? 'image/png' : file.endsWith('.js') ? 'text/javascript' : 'text/html; charset=utf-8');
+                response.setHeader('Content-Type', file.endsWith('.png') ? 'image/png' : file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html; charset=utf-8');
                 let content = fs.readFileSync(file);
                 if (file.endsWith('popup.html')) content = content.toString().replace('<script src="observer.js">', '<script src="/test-api.js"></script><script src="observer.js">');
                 response.end(content); return;
@@ -80,6 +87,7 @@ async function main() {
         const fixture = `http://127.0.0.1:${server.address().port}/`;
         await popup.goto(emulate ? fixture + 'popup.html' : `chrome-extension://${extensionId}/popup.html`);
         await popup.setViewportSize({ width: 400, height: 800 });
+        assert.equal(await popup.locator('body').evaluate(element => getComputedStyle(element).width), '380px', 'shared panel stylesheet loaded');
         const page = await context.newPage();
         await page.goto(fixture);
         const canvas = page.locator('#my-pet-observer canvas');
@@ -180,12 +188,26 @@ async function main() {
         assert.ok(small.x >= -1 && small.y >= -1 && small.x + small.width <= 361 && small.y + small.height <= 301);
         await page.setViewportSize({ width: 1280, height: 800 });
         await popup.reload();
-        await popup.locator('.my-pet-cat-item[data-cat="cat-1"]').click();
-        await page.locator('#my-pet-container').waitFor();
-        assert.equal(await page.locator('#my-pet-observer').count(), 0);
-        await popup.locator('#select-observer').click();
-        await canvas.waitFor();
+        await popup.locator('#pet-selection').selectOption('test-character');
+        await page.waitForFunction(() => document.querySelector('#my-pet-observer')?.dataset.petId === 'test-character');
+        await page.waitForFunction(() => document.querySelector('#my-pet-observer')?.shadowRoot.querySelector('canvas').dataset.action === 'rain');
+        await popup.reload();
+        await popup.waitForFunction(() => document.querySelector('#pet-selection').value === 'test-character');
+        assert.equal(await page.locator('#my-pet-observer').count(), 1, 'switching cleans up the previous player');
+        await popup.evaluate(() => chrome.storage.sync.set({ 'my-pet-character': 'cat-1', 'my-pet-selected-cat': 'dog-2', 'my-pet-motion-mode': 'parade' }));
+        await page.waitForFunction(() => document.querySelector('#my-pet-observer')?.dataset.petId === 'observer');
+        await popup.waitForFunction(() => document.querySelector('#pet-selection').value === 'observer');
+        await popup.waitForFunction(async () => (await chrome.storage.sync.get('my-pet-character'))['my-pet-character'] === 'observer');
         assert.equal(await page.locator('#my-pet-container').count(), 0);
+        assert.equal(await popup.locator('option[value="cat-1"]').count(), 0);
+        await popup.locator('#observer-reset').click();
+        await popup.waitForFunction(async () => (await chrome.storage.sync.get('my-pet-observer-position'))['my-pet-observer-position'] === null);
+        await popup.locator('#observer-size').fill('160');
+        await popup.locator('#observer-size').dispatchEvent('change');
+        await popup.waitForFunction(async () => (await chrome.storage.sync.get('my-pet-size'))['my-pet-size'] === 160);
+        await popup.locator('#theme-toggle').click();
+        await popup.screenshot({ path: path.join(artifacts, 'popup-dark.png') });
+        await popup.locator('#theme-toggle').click();
         await popup.locator('#my-pet-toggle').click();
         await page.locator('#my-pet-observer').waitFor({ state: 'detached' });
         await page.waitForTimeout(400);
@@ -193,11 +215,13 @@ async function main() {
         await popup.screenshot({ path: path.join(artifacts, 'popup.png') });
         assert.deepEqual(errors, []);
         console.log(emulate ? 'NOTE: Chrome storage/runtime were emulated; native extension loading is not covered by this run.' : 'PASS: native Chrome extension APIs and injection');
-        console.log('PASS: right-click menu, viewport clamp, legacy pet switch and disable cleanup');
+        console.log('PASS: right-click menu, viewport clamp, registered character switch/reload, retired selection fallback, size, reset, theme and disable cleanup');
     } finally {
         await context?.close();
         await new Promise(resolve => server.close(resolve));
         fs.rmSync(profile, { recursive: true, force: true });
+        fs.rmSync(root, { recursive: true, force: true });
     }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
+

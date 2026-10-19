@@ -1,5 +1,6 @@
 const { Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
+const catalog = require('../../assets/pets');
 
 // Menu-bar / system-tray controller.
 // Left-click  -> toggle the popover panel (anchored under the icon).
@@ -25,17 +26,15 @@ class TrayController {
     this.tray.on('right-click', () => this.tray.popUpContextMenu(this._contextMenu()));
 
     this.store.on('change', ({ key }) => {
-      if (key === 'species' || key === 'variant') this.tray.setImage(this._petIcon());
+      if (key === 'species') this.tray.setImage(this._petIcon());
     });
   }
 
   _petIcon() {
-    const species = this.store.get('species');
-    const variant = this.store.get('variant');
-    const file = species === 'observer' ? 'observer/roll/frame-04.png' : `${species}-${variant}.png`;
-    const petPath = path.join(__dirname, '..', '..', 'assets', 'pets', file);
+    const pet = catalog.get(this.store.get('species'));
+    const petPath = path.join(__dirname, '..', '..', 'assets', pet.thumbnail);
     let img = nativeImage.createFromPath(petPath);
-    if (species === 'observer' && !img.isEmpty()) img = img.crop({ x: 70, y: 285, width: 360, height: 380 });
+    if (pet.iconCrop && !img.isEmpty()) img = img.crop(pet.iconCrop);
     if (img.isEmpty()) {
       img = nativeImage.createFromPath(path.join(__dirname, '..', '..', 'assets', 'icons', 'icon32.png'));
     }
@@ -63,3 +62,4 @@ class TrayController {
 }
 
 module.exports = { TrayController };
+

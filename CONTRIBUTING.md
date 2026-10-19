@@ -1,342 +1,51 @@
-# Contributing to My Pet Buddy 🐾
+# 开发与新增形象
 
-Thank you for your interest in contributing to My Pet Buddy! This guide will help you understand how to contribute to this project effectively.
+Chrome 与 Electron 共用 `pets.js`（形象注册）、`observer.js`（动画与交互）、
+`popup-controller.js`（设置逻辑）和 `popup.css`（设置样式）。两端仅保留各自的存储适配器。
 
-## 📦 What's in this repo
+## 新增一个形象
 
-My Pet Buddy ships as **two apps that share the same pet art and animation logic**:
+1. 将透明 PNG 放进 `pets/<id>/<source>/frame-01.png` 等路径。ID 使用小写字母、数字、短横线。
+2. 在 `pets.js` 的默认 `register(...)` 后添加同格式的注册项。例：
 
-- **Browser extension** (repo root) — pets parade across web pages. Chrome, Edge, and other Chromium browsers.
-- **Desktop app** (`desktop/`) — an Electron app where a pet walks across your whole screen, over every app. macOS + Windows.
-
-Both use the same PNG pets in `pets/`, so adding a pet benefits both. Extension contribution is covered first; the Desktop App section near the end covers the Electron app.
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Basic knowledge of HTML, CSS, and JavaScript
-- Chrome browser for testing
-- Git installed on your system
-- Image editing software (for pet images)
-
-### Setting Up Development Environment
-
-1. **Fork the repository** on GitHub
-2. **Clone your fork** locally:
-   ```bash
-   git clone https://github.com/nycanshu/my-pet-buddy.git
-   cd my-pet-buddy
-   ```
-3. **Load the extension** in Chrome:
-   - Open Chrome and go to `chrome://extensions/`
-   - Enable "Developer mode"
-   - Click "Load unpacked" and select the project folder
-   - Test the extension to ensure it works
-
-## 🐾 Adding New Pets
-
-### Rules for Adding New Pets
-
-#### 1. **Image Requirements**
-- **Format**: PNG only (no JPG, GIF, or other formats)
-- **Background**: Must have transparent background (remove background for consistency)
-- **Quality**: High resolution, clear, and well-cropped
-- **Style**: Consistent with existing pets (cute, friendly, animated-style)
-
-#### 2. **Naming Convention**
-- **Existing pet groups**: `<pet-group>-<count>.png`
-  - Examples: `cat-7.png`, `dog-8.png`, `bird-7.png`
-- **New pet groups**: Follow the same pattern
-  - Examples: `fish-1.png`, `turtle-1.png`, `penguin-1.png`
-
-#### 3. **File Structure**
-```
-pets/
-├── cat-1.png through cat-6.png
-├── dog-1.png through dog-6.png
-├── bird-1.png through bird-6.png
-├── hamster-1.png through hamster-6.png
-├── rabbit-1.png through rabbit-6.png
-└── [your-new-pet]-1.png
+```js
+register({
+    id: 'new-buddy',
+    name: '新伙伴',
+    assetRoot: 'pets/new-buddy',
+    thumbnail: 'pets/new-buddy/idle/frame-01.png',
+    actions: {
+        idle: { name: '待机', source: 'idle', frames: [1, 2], fps: 2,
+            view: [0, 0, 300, 300], anchor: [150, 280], hit: [30, 30, 270, 290] },
+        bounce: { name: '蹦跶', source: 'bounce', frames: [1, 2, 3, 2], fps: 8,
+            view: [0, 0, 300, 300], anchor: [150, 280], hit: [30, 0, 270, 290] }
+    }
+});
 ```
 
-#### 4. **Code Updates Required**
+- `idle`（默认）和 `bounce`（单击互动）必需，其他动作可按素材添加。设置面板、自动活动和右键菜单由动作配置生成。
+- `source` 是该形象目录下的动作文件夹；`frames` 是两位编号 PNG 的播放顺序，`fps` 是每秒帧数。
+- `view` 是原图裁剪 `[x, y, width, height]`；`anchor` 是原图中的脚部锚点 `[x, y]`，保持切换动作时位置稳定。
+- `hit` 是原图可交互范围 `[left, top, right, bottom]`，实际点击区域还会结合 PNG 透明像素。
+- 可选 `iconCrop: { x, y, width, height }` 决定桌面托盘图标裁剪。
+- 注册 ID 是持久化标识，不应随意改名。不存在的旧 ID 自动回落到小黑。
 
-**For existing pet groups:**
-- No code changes needed (automatically detected)
+无需复制旧宠物引擎、修改两版 HTML 或按文件名探测图库；新形象的素材路径也已被 Chrome manifest 的通用规则覆盖。
+桌面启动／打包执行 `desktop/scripts/copy-assets.js`，先清空生成目录再复制共享资源，避免旧宠物残留在安装包里。
 
-**For new pet groups:**
-- Update `PET_TYPES` in `popup.js`:
-  ```javascript
-  const PET_TYPES = [
-      'cat', 'dog', 'bird', 'hamster', 'rabbit',
-      'your-new-pet-group'  // Add your new pet group here
-  ];
-  ```
+## 验证
 
-### Step-by-Step Guide
-
-1. **Prepare your pet image**:
-   - Create/edit your pet image
-   - Remove background (make it transparent)
-   - Save as PNG format
-   - Name it according to the convention
-
-2. **Add the image**:
-   - Place the PNG file in the `pets/` folder
-   - Follow the naming convention exactly
-
-3. **Update code (if new pet group)**:
-   - Open `popup.js`
-   - Find the `PET_TYPES` array
-   - Add your new pet group name
-
-4. **Test locally**:
-   - Reload the extension in Chrome
-   - Test that your new pet appears in the popup
-   - Verify the pet displays correctly on websites
-   - Check that animations work properly
-
-5. **Update documentation**:
-   - If adding a new pet group, update this CONTRIBUTING.md
-   - Update README.md if needed
-
-## 🧪 Testing Your Changes
-
-### Local Testing Checklist
-
-- [ ] Extension loads without errors
-- [ ] New pet appears in the popup menu
-- [ ] Pet displays correctly on different websites
-- [ ] Animations work smoothly
-- [ ] No console errors in browser developer tools
-- [ ] All existing functionality still works
-
-### Testing Steps
-
-1. **Load the extension**:
-   ```bash
-   # In Chrome: chrome://extensions/
-   # Enable Developer mode
-   # Click "Load unpacked" and select your project folder
-   ```
-
-2. **Test the popup**:
-   - Click the extension icon
-   - Verify your new pet appears in the list
-   - Select your new pet and test functionality
-
-3. **Test on websites**:
-   - Visit different websites (Google, GitHub, etc.)
-   - Verify your pet appears and animates correctly
-   - Test different pet positions (top, middle, bottom)
-
-4. **Check for errors**:
-   - Open browser developer tools (F12)
-   - Look for any JavaScript errors
-   - Test in both light and dark mode websites
-
-## 📝 Submitting Your Contribution
-
-### Before Submitting
-
-- [ ] Test all changes locally
-- [ ] Ensure no errors in browser console
-- [ ] Follow naming conventions exactly
-- [ ] Update code if adding new pet groups
-- [ ] Verify image quality and transparency
-
-### Pull Request Process
-
-1. **Create a feature branch**:
-   ```bash
-   git checkout -b feature/add-new-pets
-   ```
-
-2. **Commit your changes**:
-   ```bash
-   git add pets/your-new-pet.png
-   git add popup.js  # if you modified it
-   git commit -m "Add new pet: [pet-name]"
-   ```
-
-3. **Push to your fork**:
-   ```bash
-   git push origin feature/add-new-pets
-   ```
-
-4. **Create a Pull Request**:
-   - Go to your fork on GitHub
-   - Click "New Pull Request"
-   - Fill out the PR template (if available)
-   - Include screenshots of your new pet in action
-
-### Pull Request Guidelines
-
-**Title Format**: `Add new pet: [pet-name]` or `Add new feature [feature-name]`
-
-**Description should include**:
-- What pet(s) you added
-- Any code changes made
-- Screenshots of the new pet in action
-- Confirmation that you tested locally
-
-**Example PR Description**:
-```markdown
-## Added New Pet: Golden Retriever
-
-### Changes Made:
-- Added `dog-7.png` (Golden Retriever) to pets folder
-- Image has transparent background and follows naming convention
-- Tested locally and verified it works correctly
-
-### Screenshots:
-[Include screenshots of the new pet in the popup and on websites]
-
-### Testing:
-- ✅ Extension loads without errors
-- ✅ New pet appears in popup
-- ✅ Pet displays correctly on test websites
-- ✅ Animations work smoothly
-```
-
-## 🔍 Review Process
-
-### What We Look For
-
-1. **Image Quality**:
-   - High resolution and clear
-   - Transparent background
-   - Consistent style with existing pets
-   - Proper naming convention
-
-2. **Code Quality**:
-   - Follows existing code patterns
-   - No unnecessary changes
-   - Proper variable naming
-   - Clean, readable code
-
-3. **Testing**:
-   - Thoroughly tested locally
-   - No errors or issues
-   - Works across different websites
-   - Maintains existing functionality
-
-### Review Timeline
-
-- **Initial Review**: Within 2-3 business days
-- **Feedback**: We'll provide feedback if changes are needed
-- **Approval**: Once approved, your PR will be merged
-- **Release**: New pets will be included in the next extension update
-
-## 🚫 What Not to Contribute
-
-### Please Avoid:
-- Low-quality or blurry images
-- Images with backgrounds (must be transparent)
-- Inappropriate or offensive content
-- Non-pet related images
-- Breaking existing functionality
-- Unnecessary code changes
-
-### Image Guidelines:
-- ❌ No JPG or GIF formats
-- ❌ No images with solid backgrounds
-- ❌ No low-resolution images
-- ❌ No copyrighted or trademarked characters
-- ✅ PNG format only
-- ✅ Transparent background
-- ✅ High quality and clear
-- ✅ Original or properly licensed content
-
-## 🖥️ Desktop App (Electron)
-
-My Pet Buddy also ships as a desktop app (`desktop/`) that walks a pet across your
-whole screen, over any app. It reuses the same pet art and animation logic as the
-browser extension.
-
-### Run it locally
 ```bash
-cd desktop
-npm install
-npm start
-```
-The pet appears at the bottom of your screen. Control it from the menu-bar (macOS)
-or system-tray (Windows) icon: Show/Hide, Settings, Launch at Login, Quit.
-
-### Project layout
-- `main.js` — app bootstrap (AppController)
-- `src/store/` — settings (electron-store) + defaults
-- `src/walker/pacing.js` — pure pacing math (unit-tested)
-- `overlay/` — the transparent pet overlay (`PetWalker.js`, reused `pets.js`)
-- `settings/` — the settings window (reused extension `popup.html`)
-- `src/windows/`, `src/tray/`, `src/system/`, `src/ipc/` — window/tray/OS/IPC managers
-
-### Tests
-```bash
-cd desktop
-npm test        # pacing + settings unit tests
+npm ci
+npm test
+npx playwright install chromium
+npm run test:browser
+npm ci --prefix desktop
+npm test --prefix desktop
+npm run test:desktop
 ```
 
-### Adding a new pet
-Same rules as the **Adding New Pets** section above: add six transparent PNGs
-`pets/<species>-1..6.png` at the repo root, then register the species in `pets.js`.
-The desktop app copies `pets/` into its bundle automatically, so a new pet shows up
-in both the extension and the desktop app.
+Linux 上真实 Electron 冒烟需使用 `xvfb-run --auto-servernum npm run test:desktop`。
+两版冒烟会在临时副本中注册测试形象，验证切换、重新打开后的持久化、旧配置回落和原有互动，不会把测试形象加入发布包。
 
-### Building installers
-```bash
-cd desktop
-npm run dist        # current platform
-npm run dist:mac    # universal .dmg (run on macOS)
-npm run dist:win    # .exe (run on Windows or CI)
-```
-Tagged pushes (`v*`) trigger `.github/workflows/desktop-release.yml`, which builds
-the macOS `.dmg` and Windows `.exe` and publishes them to GitHub Releases.
-
-## 🆘 Getting Help
-
-### Need Assistance?
-
-- **Issues**: Create a GitHub issue for questions
-- **Discussions**: Use GitHub Discussions for general questions
-- **Email**: Contact the maintainer for urgent issues
-
-### Common Issues
-
-**Pet not appearing**:
-- Check file naming convention
-- Verify PNG format
-- Ensure transparent background
-- Check browser console for errors
-
-**Extension not loading**:
-- Verify all files are in correct locations
-- Check for syntax errors in JavaScript
-- Ensure manifest.json is valid
-
-**Animations not working**:
-- Test on different websites
-- Check if content script is loading
-- Verify pet selection is working
-
-## 📋 Contribution Checklist
-
-Before submitting your PR, ensure:
-
-- [ ] Pet image follows naming convention
-- [ ] Image has transparent background
-- [ ] Image is high quality and clear
-- [ ] Code updated if adding new pet group
-- [ ] Tested locally and works correctly
-- [ ] No errors in browser console
-- [ ] PR description is complete
-- [ ] Screenshots included (if applicable)
-
-## 🎉 Thank You!
-
-Your contributions help make My Pet Buddy better for everyone! We appreciate your time and effort in contributing to this project.
-
----
-
-**Happy Contributing! 🐾✨**
+提交 PR 到本仓库 `main`。请保留 `LICENSE` 与安装器许可证的版权声明。

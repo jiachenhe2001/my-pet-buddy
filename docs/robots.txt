@@ -1,4 +1,5 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://nycanshu.github.io/my-pet-buddy/sitemap.xml
+Sitemap: https://jiachenhe2001.github.io/my-pet-buddy/sitemap.xml
+

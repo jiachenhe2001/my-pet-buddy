@@ -43,14 +43,14 @@ A **Desktop shortcut** and a **Start Menu** entry are created automatically.
 
 ## 4. First launch — where's the pet? 👀
 
-- A cute pet starts **walking along the bottom of your screen**, over your other apps.
+- 小黑默认出现在其他应用上方，可拖动调整位置。
 - **There is no app window** — that's by design. The app lives in your **system tray** (bottom-right of the taskbar, near the clock). The tray icon *is* your pet.
 - If you don't see the tray icon, click the small **▲ (show hidden icons)** arrow near the clock — Windows often hides new tray icons there. You can drag it out to keep it visible.
 
 ### Using it
-- **Left-click** the tray icon → opens the little settings popover (choose your pet, position, motion, theme, etc.).
+- **Left-click** the tray icon → opens the little settings popover （形象、动作、大小、暂停、重置位置和主题）.
 - **Right-click** the tray icon → quick menu: **Show/Hide Pet**, **Settings**, **Launch at Login**, **Quit**.
-- 在面板中选择「小黑 · 动态桌宠」即可使用小黑的全部动作；单击蹦跶，拖动调整位置，右键切换动作。原有宠物仍显示爱心。
+- 默认显示小黑；单击蹦跶，拖动调整位置，右键切换动作。
 
 ---
 
@@ -78,6 +78,7 @@ Your preferences are kept by default in case you reinstall.
 
 ## 🤝 Contributions are welcome!
 
-My Pet Buddy is **open source (MIT)** and contributions are very welcome — new pets, features, bug fixes, or docs. See **[CONTRIBUTING.md](CONTRIBUTING.md)** to get started (adding a new pet is a one-file change!). Found a bug or have an idea? [Open an issue](https://github.com/nycanshu/my-pet-buddy/issues).
+My Pet Buddy is **open source (MIT)** and contributions are very welcome — new pets, features, bug fixes, or docs. See **[CONTRIBUTING.md](CONTRIBUTING.md)** to get started . Found a bug or have an idea? [Open an issue](https://github.com/jiachenhe2001/my-pet-buddy/issues).
 
 Made with ❤️ — enjoy your desktop buddy!
+

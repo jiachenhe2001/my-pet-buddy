@@ -6,16 +6,25 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
-const { SettingsStore } = require('../desktop/src/store/SettingsStore');
-const { DEFAULTS } = require('../desktop/src/store/defaults');
 
 async function main() {
-    const root = path.resolve(__dirname, '..');
-    const artifacts = path.join(root, 'test-results', 'desktop');
+    const source = path.resolve(__dirname, '..');
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pet-buddy-native-'));
+    for (const file of ['desktop', 'pets', 'icons', 'observer.js', 'pets.js', 'popup-controller.js', 'popup.css']) {
+        fs.cpSync(path.join(source, file), path.join(root, file), { recursive: true,
+            filter: entry => !['node_modules', 'assets', 'release'].includes(path.basename(entry)) });
+    }
+    fs.cpSync(path.join(source, 'pets/observer'), path.join(root, 'pets/test-character'), { recursive: true });
+    fs.appendFileSync(path.join(root, 'pets.js'), `\n{ const catalog = typeof module !== 'undefined' && module.exports ? module.exports : globalThis.PetBuddyPets; catalog.register({ ...catalog.get(), id: 'test-character', name: '测试形象', assetRoot: 'pets/test-character', thumbnail: 'pets/test-character/roll/frame-04.png' }); }\n`);
+    // Native fixture resolves the same installed dependencies as the real project.
+    fs.symlinkSync(path.join(source, 'desktop/node_modules'), path.join(root, 'desktop/node_modules'), 'junction');
+    const artifacts = path.join(source, 'test-results', 'desktop');
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'pet-buddy-desktop-'));
     const emulate = process.env.PET_BUDDY_EMULATE_DESKTOP === '1';
     const errors = [], network = [], mainLog = [];
     let app, browser, context, popup, overlay;
+    fs.mkdirSync(path.join(root, 'test/fixtures'), { recursive: true });
+    fs.copyFileSync(path.join(__dirname, 'fixtures/desktop-main.cjs'), path.join(root, 'test/fixtures/desktop-main.cjs'));
     execFileSync(process.execPath, [path.join(root, 'desktop/scripts/copy-assets.js')]);
     fs.mkdirSync(artifacts, { recursive: true });
     try {
@@ -25,6 +34,8 @@ async function main() {
                 // Match Electron's local-file origin behavior in browser mode.
                 args: ['--no-sandbox', '--allow-file-access-from-files', ...JSON.parse(process.env.PET_BUDDY_CHROMIUM_ARGS || '[]')] });
             context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+            const { SettingsStore } = require(path.join(root, 'desktop/src/store/SettingsStore'));
+            const { DEFAULTS } = require(path.join(root, 'desktop/src/store/defaults'));
             const data = {};
             const store = new SettingsStore({ get: key => data[key], set: (key, value) => { data[key] = value; } }, DEFAULTS);
             await context.exposeBinding('__settings', async (_source, method, values) => {
@@ -58,7 +69,7 @@ async function main() {
         } else {
             const executablePath = require('../desktop/node_modules/electron');
             app = await electron.launch({ executablePath,
-                args: ['--no-sandbox', path.join(__dirname, 'fixtures/desktop-main.cjs')],
+                args: ['--no-sandbox', path.join(root, 'test/fixtures/desktop-main.cjs')],
                 env: { ...process.env, PET_BUDDY_TEST_PROFILE: profile }, timeout: 30000 });
             app.process().stdout.on('data', data => mainLog.push(data.toString()));
             app.process().stderr.on('data', data => mainLog.push(data.toString()));
@@ -93,10 +104,10 @@ async function main() {
         const waitAction = action => overlay.waitForFunction(action => document.querySelector('#my-pet-observer')?.shadowRoot.querySelector('canvas').dataset.action === action, action);
         const saved = () => popup.evaluate(() => petBuddy.settings.getAll());
         await front(popup);
-        await popup.locator('[data-cat="cat-1"]').waitFor();
-        assert.equal((await saved()).species, 'cat', 'existing default remains available');
+        await popup.locator('#pet-selection').waitFor();
+        assert.equal((await saved()).species, 'observer', 'clean install starts with 小黑');
         assert.equal(await popup.evaluate(() => typeof require), 'undefined', 'renderer remains isolated');
-        await popup.locator('#select-observer').click(); await front(overlay); await waitAction('idle');
+        await front(overlay); await waitAction('idle');
         for (const action of ['idle', 'bounce', 'roll', 'peek', 'rain']) {
             await front(popup); await popup.locator(`button[data-action="${action}"]`).click();
             await front(overlay); await waitAction(action);
@@ -172,16 +183,24 @@ async function main() {
         await front(popup); await popup.locator('#my-pet-toggle').click(); await front(overlay); await waitAction('rain');
         await front(popup); await popup.locator('#observer-reset').click();
         assert.equal((await saved()).observerPosition, null);
-        await popup.locator('[data-cat="dog-2"]').click(); await front(overlay);
-        await overlay.locator('#stage').waitFor({ state: 'visible' });
-        assert.ok((await overlay.locator('#pet').getAttribute('src')).endsWith('/dog-2.png'));
-        assert.equal(await overlay.locator('#my-pet-observer').count(), 0);
-        await front(popup); await popup.locator('#select-observer').click(); await front(overlay); await waitAction('rain');
-        await front(popup); await popup.reload(); await popup.locator('#select-observer[aria-pressed="true"]').waitFor();
+        await popup.locator('#pet-selection').selectOption('test-character'); await front(overlay);
+        await overlay.waitForFunction(() => document.querySelector('#my-pet-observer')?.dataset.petId === 'test-character');
+        await waitAction('rain');
+        assert.equal(await overlay.locator('#my-pet-observer').count(), 1);
+        await front(popup); await popup.reload();
+        await popup.waitForFunction(() => document.querySelector('#pet-selection').value === 'test-character');
+        assert.equal((await saved()).species, 'test-character');
+        await popup.evaluate(() => petBuddy.settings.set('species', 'dog'));
+        await front(overlay);
+        await overlay.waitForFunction(() => document.querySelector('#my-pet-observer')?.dataset.petId === 'observer');
+        await waitAction('rain');
+        await front(popup);
+        await popup.locator('#observer-size').fill('160'); await popup.locator('#observer-size').dispatchEvent('change');
+        await popup.waitForFunction(async () => (await petBuddy.settings.getAll()).observerSize === 160);
         assert.equal((await saved()).species, 'observer');
         await popup.screenshot({ path: path.join(artifacts, 'settings.png') });
         assert.deepEqual(errors, []); assert.deepEqual(network, [], 'no runtime HTTP requests');
-        console.log('PASS: context menu sync, hide/restore, reset, legacy pets, settings reload, and offline assets');
+        console.log('PASS: context menu sync, hide/restore, reset, registered characters, retired selection fallback, size, settings reload, and offline assets');
         console.log(emulate ? 'NOTE: browser-only IPC substitute; native Electron is verified separately in CI.' : 'PASS: real Electron preload, IPC, local storage, and native click-through API');
     } catch (error) {
         console.error('Renderer errors:', errors);
@@ -194,7 +213,8 @@ async function main() {
         }
         throw error;
     } finally {
-        await app?.close(); await browser?.close(); fs.rmSync(profile, { recursive: true, force: true });
+        await app?.close(); await browser?.close(); fs.rmSync(profile, { recursive: true, force: true }); fs.rmSync(root, { recursive: true, force: true });
     }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
+

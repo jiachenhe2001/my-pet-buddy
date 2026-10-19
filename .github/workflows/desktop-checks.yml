@@ -5,6 +5,9 @@ on:
     paths:
       - 'desktop/**'
       - 'observer.js'
+      - 'pets.js'
+      - 'popup-controller.js'
+      - 'popup.css'
       - 'pets/**'
       - 'icons/**'
       - 'package*.json'
@@ -73,3 +76,4 @@ jobs:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.file }}
           if-no-files-found: error
+

@@ -12,7 +12,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-_Nothing yet — changes for the next release go here._
+### Changed
+- 默认使用小黑，移除旧静态宠物、巡游引擎及其设置和素材。
+- Chrome / Desktop 共用可扩展形象注册表与简洁控制面板。
+- 新增形象可切换并持久化；旧选择自动回落到小黑，现有动作、大小、暂停和位置保留。
+- 打包前清空生成的素材目录，移除旧宣传入口，保留 MIT 许可证。
+
+以下条目为历史版本记录。
 
 ## [1.0.5] - 2026-07-23
 
@@ -35,5 +41,6 @@ _Nothing yet — changes for the next release go here._
 ### Notes
 - Builds are currently **unsigned** — first launch shows a one-time OS prompt (macOS: right-click → Open; Windows: More info → Run anyway). Code signing is planned.
 
-[Unreleased]: https://github.com/nycanshu/my-pet-buddy/compare/v1.0.4...HEAD
-[1.0.4]: https://github.com/nycanshu/my-pet-buddy/releases/tag/v1.0.4
+[Unreleased]: https://github.com/jiachenhe2001/my-pet-buddy/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/jiachenhe2001/my-pet-buddy/releases/tag/v1.0.4
+
