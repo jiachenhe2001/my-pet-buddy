@@ -1,13 +1,14 @@
 {
   "name": "my-pet-buddy-desktop",
   "version": "1.3.0",
-  "description": "My Pet Buddy — desktop pet that walks over all your apps.",
+  "description": "小黑与可扩展形象的本地动态桌宠",
   "main": "main.js",
   "type": "commonjs",
   "scripts": {
     "copy-assets": "node scripts/copy-assets.js",
     "prestart": "node scripts/copy-assets.js",
     "start": "electron .",
+    "pretest": "node scripts/copy-assets.js",
     "test": "node --test",
     "dist": "npm run copy-assets && electron-builder --publish never",
     "dist:mac": "npm run copy-assets && electron-builder --mac --publish never",
@@ -36,7 +37,6 @@
       "src/**/*",
       "overlay/**/*",
       "settings/**/*",
-      "shared/**/*",
       "assets/**/*",
       "!test/**",
       "!**/*.test.js"
@@ -73,3 +73,4 @@
     ]
   }
 }
+

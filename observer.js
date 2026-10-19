@@ -2,34 +2,24 @@
 (function(root) {
     'use strict';
 
-    const range = (start, end) => Array.from({ length: end - start + 1 }, (_, i) => start + i);
+    const catalog = typeof module !== 'undefined' && module.exports ? require('./pets') : root.PetBuddyPets;
+    const defaultPet = catalog.get();
+    const ACTIONS = defaultPet.actions;
     const pingPong = frames => frames.concat(frames.slice(1, -1).reverse());
-    const ACTIONS = {
-        idle: { name: '待机', source: 'roll', frames: [4, 5], fps: 1.2,
-            view: [70, 285, 360, 380], anchor: [250, 625], hit: [70, 285, 430, 665] },
-        bounce: { name: '原地蹦跶', source: 'roll', frames: pingPong(range(1, 5)), fps: 8,
-            view: [70, 0, 550, 677], anchor: [250, 625], hit: [70, 0, 620, 677] },
-        roll: { name: '滚动', source: 'roll', frames: pingPong(range(9, 16)), fps: 10,
-            view: [70, 150, 762, 527], anchor: [250, 625], hit: [70, 150, 832, 677] },
-        peek: { name: '暗中观察', source: 'peek', frames: pingPong(range(1, 11)), fps: 7,
-            view: [0, 0, 754, 670], anchor: [440, 625], hit: [230, 270, 487, 640] },
-        rain: { name: '淋雨', source: 'rain', frames: range(1, 6), fps: 5,
-            view: [0, 0, 670, 670], anchor: [320, 575], hit: [160, 250, 495, 605] }
-    };
     const DEFAULTS = { action: 'auto', size: 120, paused: false };
     const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
-    const isAction = action => action === 'auto' || own(ACTIONS, action);
+    const isAction = (action, pet = defaultPet) => action === 'auto' || own(pet.actions, action);
     const validSize = size => Number.isFinite(size) ? Math.max(80, Math.min(180, size)) : DEFAULTS.size;
-    const frameAt = (action, elapsed) => {
-        const definition = own(ACTIONS, action) ? ACTIONS[action] : ACTIONS.idle;
+    const frameAt = (action, elapsed, pet = defaultPet) => {
+        const definition = own(pet.actions, action) ? pet.actions[action] : pet.actions.idle;
         return definition.frames[Math.floor(Math.max(0, elapsed) * definition.fps / 1000) % definition.frames.length];
     };
-    const framePath = (action, frame) => `pets/observer/${ACTIONS[action].source}/frame-${String(frame).padStart(2, '0')}.png`;
+    const framePath = (action, frame, pet = defaultPet) => `${pet.assetRoot}/${pet.actions[action].source}/frame-${String(frame).padStart(2, '0')}.png`;
 
     // The anchor is the cat's resting foot position in each original canvas.
     // Keeping a common pixel scale preserves the jump/roll already in the frames.
-    function placement(action, size, position, width, height) {
-        const { view: [vx, vy, vw, vh], anchor: [ax, ay] } = own(ACTIONS, action) ? ACTIONS[action] : ACTIONS.idle;
+    function placement(action, size, position, width, height, pet = defaultPet) {
+        const { view: [vx, vy, vw, vh], anchor: [ax, ay] } = own(pet.actions, action) ? pet.actions[action] : pet.actions.idle;
         const scale = Math.max(0.01, Math.min(validSize(size) / 300, width / vw, height / vh));
         const px = Number.isFinite(position?.x) ? position.x : 0.84;
         const py = Number.isFinite(position?.y) ? position.y : 0.96;
@@ -40,7 +30,8 @@
             y: (top + (ay - vy) * scale) / height };
     }
 
-    function createPlayer(canvas, onFrame = () => {}, getURL = path => chrome.runtime.getURL(path)) {
+    function createPlayer(canvas, onFrame = () => {}, getURL = path => chrome.runtime.getURL(path), pet = defaultPet) {
+        const ACTIONS = pet.actions;
         const context = canvas.getContext('2d', { willReadFrequently: true });
         let current = 'idle', generation = 0, timer = null, destroyed = false;
         let paused = false, ready = false, started = 0, elapsed = 0, lastFrame = null;
@@ -114,7 +105,7 @@
         function stopTimer() { clearTimeout(timer); timer = null; }
         function tick() {
             if (destroyed || paused || !ready) return;
-            const frame = frameAt(current, elapsed + performance.now() - started);
+            const frame = frameAt(current, elapsed + performance.now() - started, pet);
             if (frame !== lastFrame) draw(frame);
             timer = setTimeout(tick, 1000 / ACTIONS[current].fps);
         }
@@ -128,7 +119,7 @@
                     cache.clear(); masks.clear(); cacheSource = ACTIONS[action].source;
                 }
                 const frames = [...new Set(ACTIONS[action].frames)];
-                const loaded = await Promise.all(frames.map(frame => load(framePath(action, frame))));
+                const loaded = await Promise.all(frames.map(frame => load(framePath(action, frame, pet))));
                 if (destroyed || token !== generation) return false;
                 images = new Map(frames.map((frame, i) => [frame, loaded[i]]));
                 current = action; elapsed = 0; started = performance.now(); ready = true;
@@ -150,8 +141,11 @@
     }
 
     function mount(initial = {}, callbacks = {}) {
+        const pet = catalog.get(callbacks.petId);
+        const ACTIONS = pet.actions;
         const host = document.createElement('div');
         host.id = 'my-pet-observer';
+        host.dataset.petId = pet.id;
         host.style.cssText = 'all:initial!important;position:fixed!important;inset:0!important;z-index:2147483647!important;pointer-events:none!important;display:block!important;';
         const shadow = host.attachShadow({ mode: 'open' });
         const stylesheet = new CSSStyleSheet();
@@ -172,7 +166,7 @@
         shadow.adoptedStyleSheets = [stylesheet];
         shadow.innerHTML = `
             <div class="scene"><canvas aria-hidden="true"></canvas>
-                <button class="hit" type="button" aria-label="小黑桌宠。单击蹦跶，拖动调整位置，右键或按 M 打开动作菜单，方向键移动。"></button>
+                <button class="hit" type="button" aria-label="桌宠。单击蹦跶，拖动调整位置，右键或按 M 打开动作菜单，方向键移动。"></button>
                 <div class="hint" role="status" hidden></div>
             </div>
             <div class="menu" role="group" aria-label="桌宠动作" hidden>
@@ -194,10 +188,10 @@
         let destroyed = false, autoTimer = null, hintTimer = null, interactionTimer = null, actionToken = 0;
         const player = createPlayer(canvas, (action, mask) => {
             active = action; hit.style.clipPath = mask; layout();
-        }, callbacks.getURL);
+        }, callbacks.getURL, pet);
 
         function layout() {
-            const rect = placement(active, options.size, position, innerWidth, innerHeight);
+            const rect = placement(active, options.size, position, innerWidth, innerHeight, pet);
             Object.assign(scene.style, { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` });
             callbacks.onHitAreaChange?.();
             return rect;
@@ -211,7 +205,7 @@
             clearTimeout(autoTimer);
             if (destroyed || options.action !== 'auto' || suspended()) return;
             autoTimer = setTimeout(() => {
-                const choices = ['bounce', 'roll', 'peek', 'rain'];
+                const choices = Object.keys(ACTIONS).filter(action => action !== 'idle');
                 const next = active === 'idle' ? choices[Math.floor(Math.random() * choices.length)] : 'idle';
                 play(next);
             }, delay ?? (active === 'idle' ? 5000 + Math.random() * 5000 : Math.max(2400, ACTIONS[active].frames.length / ACTIONS[active].fps * 2000)));
@@ -272,7 +266,7 @@
             const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
             if (Math.hypot(dx, dy) > 4) drag.moved = true;
             if (!drag.moved) return;
-            const next = placement(active, options.size, { x: drag.original.x + dx / innerWidth, y: drag.original.y + dy / innerHeight }, innerWidth, innerHeight);
+            const next = placement(active, options.size, { x: drag.original.x + dx / innerWidth, y: drag.original.y + dy / innerHeight }, innerWidth, innerHeight, pet);
             position = { x: next.x, y: next.y }; layout();
         });
         listen(hit, 'pointerup', event => { event.stopPropagation(); finishDrag(event); });
@@ -318,7 +312,7 @@
 
         function update(next) {
             const previous = options;
-            options = { action: isAction(next.action) ? next.action : DEFAULTS.action,
+            options = { action: isAction(next.action, pet) ? next.action : DEFAULTS.action,
                 size: validSize(next.size), paused: Boolean(next.paused) };
             if (own(next, 'position') && (Boolean(next.position) !== Boolean(previous.position) || next.position?.x !== previous.position?.x || next.position?.y !== previous.position?.y)) {
                 position = next.position; options.position = next.position;
@@ -347,3 +341,4 @@
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     else root.PetBuddyObserver = api;
 })(globalThis);
+

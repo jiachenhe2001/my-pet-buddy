@@ -1,11 +1,5 @@
-blank_issues_enabled: false
+blank_issues_enabled: true
 contact_links:
-  - name: 🐾 My Pet Buddy Community
-    url: https://github.com/nycanshu/my-pet-buddy/discussions
-    about: Ask questions, share ideas, and connect with other pet lovers!
-  - name: 📧 Email Support
-    url: mailto:hkg43700@gmail.com
-    about: Contact us directly for urgent issues or private matters
-  - name: 📖 Documentation
-    url: https://github.com/nycanshu/my-pet-buddy#readme
-    about: Check our README for installation and usage instructions
+  - name: 安装与使用文档
+    url: https://github.com/jiachenhe2001/my-pet-buddy#readme
+    about: Chrome 与 Desktop 的安装、使用和开发说明

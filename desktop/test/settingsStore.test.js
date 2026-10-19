@@ -1,72 +1,44 @@
 const test = require('node:test');
-const assert = require('node:assert');
+const assert = require('node:assert/strict');
 const { SettingsStore } = require('../src/store/SettingsStore');
 const { DEFAULTS } = require('../src/store/defaults');
-
-// In-memory backend fake implementing the backend contract: get/set.
+const catalog = require('../assets/pets');
+catalog.register({ ...catalog.get(), id: 'test-character', name: '测试形象' });
 function fakeBackend(initial = {}) {
   const data = { ...initial };
-  return {
-    get: (k) => data[k],
-    set: (k, v) => { data[k] = v; },
-    _data: data,
-  };
+  return { get: key => data[key], set: (key, value) => { data[key] = value; }, data };
 }
-
-test('get returns default when unset', () => {
-  const store = new SettingsStore(fakeBackend(), DEFAULTS);
-  assert.strictEqual(store.get('species'), 'cat');
-  assert.strictEqual(store.get('enabled'), true);
+test('clean install and retired or invalid saved characters resolve to 小黑', () => {
+  for (const species of [undefined, 'cat', 'dog', '__proto__', 'missing']) {
+    const store = new SettingsStore(fakeBackend({ species, variant: 4, position: 'top', motionMode: 'parade' }), DEFAULTS);
+    assert.equal(store.get('species'), 'observer');
+    assert.equal(store.getAll().species, 'observer');
+    assert.equal(store.get('enabled'), true);
+    assert.equal('variant' in store.getAll(), false);
+    assert.equal('motionMode' in store.getAll(), false);
+  }
 });
-
-test('get returns stored value over default', () => {
-  const store = new SettingsStore(fakeBackend({ species: 'dog' }), DEFAULTS);
-  assert.strictEqual(store.get('species'), 'dog');
-});
-
-test('set persists and emits change', () => {
-  const backend = fakeBackend();
+test('a new registered character persists across reopen and is shared with both windows atomically', () => {
+  const backend = fakeBackend({ species: 'cat', observerAction: 'idle' });
   const store = new SettingsStore(backend, DEFAULTS);
-  const events = [];
-  store.on('change', (e) => events.push(e));
-  store.set('variant', 4);
-  assert.strictEqual(backend._data.variant, 4);
-  assert.deepStrictEqual(events, [{ key: 'variant', value: 4 }]);
-});
-
-test('getAll merges defaults with stored', () => {
-  const store = new SettingsStore(fakeBackend({ theme: 'dark' }), DEFAULTS);
-  const all = store.getAll();
-  assert.strictEqual(all.theme, 'dark');
-  assert.strictEqual(all.species, 'cat');
-});
-
-test('set is a no-op (no emit) when the value is unchanged', () => {
-  const store = new SettingsStore(fakeBackend({ species: 'dog' }), DEFAULTS);
-  const events = [];
-  store.on('change', (e) => events.push(e));
-  store.set('species', 'dog');   // same as stored
-  store.set('enabled', true);    // same as default
-  assert.deepStrictEqual(events, []);
-  store.set('species', 'cat');   // real change
-  assert.deepStrictEqual(events, [{ key: 'species', value: 'cat' }]);
-});
-
-test('a batch notifies both windows only after the complete animated selection is stored', () => {
-  const backend = fakeBackend({ species: 'dog', variant: 4 });
-  const store = new SettingsStore(backend, DEFAULTS);
-  const selection = { species: 'observer', observerAction: 'roll', observerSize: 150, observerPaused: true,
+  const selection = { species: 'test-character', observerAction: 'roll', observerSize: 150, observerPaused: true,
     observerPosition: { x: 0.3, y: 0.7 } };
   const snapshots = [];
   store.on('change', () => snapshots.push(store.getAll()));
   store.setMany(selection);
-  assert.strictEqual(snapshots.length, Object.keys(selection).length);
-  for (const snapshot of snapshots) {
-    for (const [key, value] of Object.entries(selection)) assert.deepStrictEqual(snapshot[key], value);
-  }
-  const reopened = new SettingsStore(backend, DEFAULTS);
-  assert.deepStrictEqual(reopened.getAll(), store.getAll());
-  reopened.set('species', 'dog');
-  assert.strictEqual(reopened.get('variant'), 4, 'the old pet selection survives');
-  assert.strictEqual(reopened.get('observerAction'), 'roll');
+  assert.equal(snapshots.length, Object.keys(selection).length);
+  for (const snapshot of snapshots) for (const [key, value] of Object.entries(selection)) assert.deepEqual(snapshot[key], value);
+  assert.deepEqual(new SettingsStore(backend, DEFAULTS).getAll(), store.getAll());
+  store.set('species', 'observer');
+  assert.equal(store.get('observerAction'), 'roll');
+  assert.equal(store.get('observerPaused'), true);
+});
+test('unchanged values and removed settings do not emit changes', () => {
+  const store = new SettingsStore(fakeBackend(), DEFAULTS), events = [];
+  store.on('change', event => events.push(event));
+  store.setMany({ enabled: true, species: 'dog', variant: 3, motionMode: 'left' });
+  assert.deepEqual(events, []);
+  store.set('theme', 'dark');
+  assert.deepEqual(events, [{ key: 'theme', value: 'dark' }]);
+  assert.equal(store.getAll().theme, 'dark');
 });

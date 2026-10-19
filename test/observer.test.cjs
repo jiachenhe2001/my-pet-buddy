@@ -23,7 +23,7 @@ test('播放按经过的时间计算，能越过延迟的回调并完整循环',
 test('每个动作引用的原始 PNG 均存在并由扩展公开', () => {
     const manifest = require('../manifest.json');
     assert.ok(manifest.content_scripts[0].js.indexOf('observer.js') < manifest.content_scripts[0].js.indexOf('content.js'));
-    assert.ok(manifest.web_accessible_resources.some(group => group.resources.includes('pets/observer/*/*.png')));
+    assert.ok(manifest.web_accessible_resources.some(group => group.resources.includes('pets/*/*/*.png')));
     for (const [action, definition] of Object.entries(ACTIONS)) {
         for (const frame of definition.frames) {
             const data = fs.readFileSync(path.join(__dirname, '..', framePath(action, frame)));
@@ -65,3 +65,4 @@ test('无效设置有默认值，显示大小限定在可控制的范围', () =>
     assert.equal(validSize(-1), 80);
     assert.equal(validSize(5000), 180);
 });
+

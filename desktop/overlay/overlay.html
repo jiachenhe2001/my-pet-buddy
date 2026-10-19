@@ -1,44 +1,13 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'" />
-  <style>
-    html, body {
-      margin: 0; padding: 0; width: 100%; height: 100%;
-      background: transparent; overflow: hidden;
-      -webkit-user-select: none; user-select: none;
-    }
-    #stage { position: fixed; inset: 0; }
-    #pet {
-      position: absolute; bottom: 0; left: 0;
-      width: 90px; height: 90px; object-fit: contain;
-      will-change: transform;
-      transform: translateZ(0); /* promote to its own compositor layer */
-    }
-  </style>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'">
+  <style>html, body { margin:0; padding:0; width:100%; height:100%; background:transparent; overflow:hidden; user-select:none; }</style>
 </head>
 <body>
-  <div id="stage" hidden><img id="pet" alt="pet" /></div>
-
-  <style>
-    .pb-heart { position: fixed; font-size: 20px; pointer-events: none; z-index: 10; }
-    @keyframes pb-heart-float {
-      0%   { opacity: 1; transform: translateY(0) scale(1); }
-      100% { opacity: 0; transform: translateY(-70px) scale(1.4); }
-    }
-    .pb-bubble {
-      position: fixed; transform: translateX(-50%);
-      background: #ffffff; color: #2c3e50; border: 1px solid #e9ecef;
-      padding: 8px 12px; border-radius: 12px; font: 13px -apple-system, 'Segoe UI', sans-serif;
-      box-shadow: 0 4px 14px rgba(0,0,0,.15); pointer-events: none; z-index: 10; white-space: nowrap;
-    }
-    .pb-bubble.theme-dark { background: #2c3e50; color: #f8f9fa; border-color: #3a4a5e; }
-  </style>
-
+  <script src="../assets/pets.js"></script>
   <script src="../assets/observer.js"></script>
-  <script src="../src/walker/pacing.js"></script>
-  <script src="PetWalker.js"></script>
   <script src="controller.js"></script>
 </body>
 </html>

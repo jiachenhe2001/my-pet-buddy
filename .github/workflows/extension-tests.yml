@@ -5,6 +5,7 @@ on:
     paths:
       - '*.js'
       - 'popup.html'
+      - 'popup.css'
       - 'manifest.json'
       - 'package*.json'
       - 'pets/**'
@@ -35,3 +36,4 @@ jobs:
           name: extension-screenshots
           path: test-results/
           if-no-files-found: ignore
+
