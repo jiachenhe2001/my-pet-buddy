@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "My Pet Buddy - Virtual Pet Companion",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "网页里的小黑桌宠：待机、蹦跶、滚动、暗中观察和淋雨。支持拖动、互动和记住位置。",
   "icons": {
     "16": "icons/icon16.png",

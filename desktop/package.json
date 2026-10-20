@@ -1,6 +1,6 @@
 {
   "name": "my-pet-buddy-desktop",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "小黑与可扩展形象的本地动态桌宠",
   "main": "main.js",
   "type": "commonjs",

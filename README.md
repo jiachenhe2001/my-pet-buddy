@@ -34,7 +34,7 @@ npm run test:browser
 
 浏览器冒烟默认加载真实的未打包扩展。只有在仅支持 headless-shell 的测试环境中才使用 `PET_BUDDY_EMULATE_EXTENSION=1`，该模式仅模拟 `chrome.storage` 和 `chrome.runtime.getURL`，用于渲染、交互及同步检查，不替代真实扩展加载验证。CI 使用默认的真实扩展模式。
 
-**在桌面中使用：**启动后默认在其他应用上方显示小黑，点击菜单栏／系统托盘图标打开设置。隐藏后，可从托盘右键菜单的 **Show Pet** 或面板顶部开关恢复。素材和设置全部本地保存，安装后可断网运行，不自动检查更新。安装包获取及本地运行见 [`desktop/README.md`](desktop/README.md)。
+**在桌面中使用：**启动后默认在其他应用上方显示小黑，点击菜单栏／系统托盘图标打开设置。隐藏后，可从托盘右键菜单的 **Show Pet** 或面板顶部开关恢复。素材和设置全部本地保存，安装后可断网运行，不自动检查更新。安装包可从 [最新版本下载页](https://github.com/jiachenhe2001/my-pet-buddy/releases/latest) 获取，本地运行见 [`desktop/README.md`](desktop/README.md)。
 
 两端复用 [`observer.js`](observer.js) 的动作、播放和拖动逻辑，桌面启动／打包时自动复制共享模块与素材。素材说明见 [`pets/observer/README.md`](pets/observer/README.md)。
 

@@ -17,7 +17,9 @@ macOS / Windows 本地桌宠。与 Chrome 版共用项目根目录的 `observer.
 
 请使用本仓库构建的安装包。
 
-在本仓库的 [Actions → Desktop checks](https://github.com/jiachenhe2001/my-pet-buddy/actions/workflows/desktop-checks.yml)
+优先从 [最新版本下载页](https://github.com/jiachenhe2001/my-pet-buddy/releases/latest) 获取 `.exe` / `.dmg` 安装包。
+
+开发构建也可在本仓库的 [Actions → Desktop checks](https://github.com/jiachenhe2001/my-pet-buddy/actions/workflows/desktop-checks.yml)
 中打开成功的构建，从 Artifacts 下载 `desktop-mac` 或 `desktop-windows`，解压后安装其中的
 `.dmg` 或 `.exe`。PR 检查和手动运行均可生成安装包；构建默认不发布 Release。
 

@@ -12,6 +12,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+暂无。
+
+## [1.4.0] - 2026-10-20
+
 ### Changed
 - 默认使用小黑，移除旧静态宠物、巡游引擎及其设置和素材。
 - Chrome / Desktop 共用可扩展形象注册表与简洁控制面板。
