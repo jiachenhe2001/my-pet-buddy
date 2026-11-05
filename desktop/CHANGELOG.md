@@ -13,6 +13,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 暂无。
 
+## [1.5.1] - 2026-11-06
+
+### Fixed
+- 定时同步已有 Codex 会话的最新回复和轮次状态；刷新、重复选择会话也会补读最终答案，保留进度／答复阶段。
+- 去掉常驻 Codex 标签，完成／待确认气泡约 7 秒后收起；后台完成不再自动展开聊天窗。
+- macOS 透明桌宠层覆盖整个屏幕，允许拖到 Dock 所在的底部区域。
+- 动作播放一轮后待机约 10 秒，自动活动间隔延长到 15–25 秒。
+- 点击或键盘互动保持原动作，只显示互动气泡。
+- 历史同步失败保留已有回复并重试，避免旧读取覆盖新任务、重复回复或重复完成提醒。
+
 ## [1.5.0] - 2026-11-05
 
 ### Added
@@ -57,7 +67,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Notes
 - Builds are currently **unsigned** — first launch shows a one-time OS prompt (macOS: right-click → Open; Windows: More info → Run anyway). Code signing is planned.
 
-[Unreleased]: https://github.com/jiachenhe2001/my-pet-buddy/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/jiachenhe2001/my-pet-buddy/compare/v1.5.1...HEAD
+[1.5.1]: https://github.com/jiachenhe2001/my-pet-buddy/releases/tag/v1.5.1
 [1.5.0]: https://github.com/jiachenhe2001/my-pet-buddy/releases/tag/v1.5.0
 [1.4.0]: https://github.com/jiachenhe2001/my-pet-buddy/releases/tag/v1.4.0
 [1.0.4]: https://github.com/jiachenhe2001/my-pet-buddy/releases/tag/v1.0.4

@@ -166,7 +166,7 @@
         shadow.adoptedStyleSheets = [stylesheet];
         shadow.innerHTML = `
             <div class="scene"><canvas aria-hidden="true"></canvas>
-                <button class="hit" type="button" aria-label="桌宠。单击蹦跶，拖动调整位置，右键或按 M 打开动作菜单，方向键移动。"></button>
+                <button class="hit" type="button" aria-label="桌宠。单击互动，拖动调整位置，右键或按 M 打开动作菜单，方向键移动。"></button>
                 <div class="hint" role="status" hidden></div>
             </div>
             <div class="menu" role="group" aria-label="桌宠动作" hidden>
@@ -185,7 +185,8 @@
         const abort = new AbortController();
         const listen = (element, type, handler, extra = {}) => element.addEventListener(type, handler, { signal: abort.signal, ...extra });
         let options = {}, active = 'idle', position = null, drag = null, lastDragged = false;
-        let destroyed = false, autoTimer = null, hintTimer = null, interactionTimer = null, actionToken = 0;
+        let destroyed = false, autoTimer = null, hintTimer = null, actionToken = 0;
+        let activityDue = 0, activityRemaining = null;
         const player = createPlayer(canvas, (action, mask) => {
             active = action; hit.style.clipPath = mask; layout();
         }, callbacks.getURL, pet);
@@ -201,38 +202,47 @@
             clearTimeout(hintTimer); hintTimer = setTimeout(() => { hint.hidden = true; }, 2400);
         }
         const suspended = () => options.paused || document.hidden || Boolean(drag) || !menu.hidden;
-        function scheduleAuto(delay) {
-            clearTimeout(autoTimer);
-            if (destroyed || options.action !== 'auto' || suspended()) return;
+        function stopActivity(preserve = false) {
+            if (preserve && autoTimer !== null) activityRemaining = Math.max(0, activityDue - performance.now());
+            clearTimeout(autoTimer); autoTimer = null;
+            if (!preserve) activityRemaining = null;
+        }
+        function scheduleActivity() {
+            if (destroyed || options.action === 'idle') { stopActivity(); return; }
+            if (suspended()) { stopActivity(true); return; }
+            if (autoTimer !== null) return;
+            // Keep the original animation speed; rest between complete cycles.
+            const delay = activityRemaining ?? (active === 'idle'
+                ? options.action === 'auto' ? 15000 + Math.random() * 10000 : 10000
+                : ACTIONS[active].frames.length / ACTIONS[active].fps * 1000);
+            activityRemaining = null; activityDue = performance.now() + delay;
             autoTimer = setTimeout(() => {
+                autoTimer = null;
+                if (suspended()) { activityRemaining = 0; return; }
                 const choices = Object.keys(ACTIONS).filter(action => action !== 'idle');
-                const next = active === 'idle' ? choices[Math.floor(Math.random() * choices.length)] : 'idle';
+                const next = active === 'idle'
+                    ? options.action === 'auto' ? choices[Math.floor(Math.random() * choices.length)] : options.action
+                    : 'idle';
                 play(next);
-            }, delay ?? (active === 'idle' ? 5000 + Math.random() * 5000 : Math.max(2400, ACTIONS[active].frames.length / ACTIONS[active].fps * 2000)));
+            }, delay);
         }
         async function play(action) {
             const token = ++actionToken;
-            clearTimeout(autoTimer);
+            stopActivity();
             try {
                 const applied = await player.setAction(action);
                 if (applied && !destroyed && token === actionToken) {
-                    player.setPaused(suspended()); scheduleAuto(); return true;
+                    player.setPaused(suspended()); scheduleActivity(); return true;
                 }
             } catch (error) {
                 if (!destroyed && token === actionToken) message(error.message);
             }
             return false;
         }
-        async function interact() {
-            clearTimeout(interactionTimer);
-            const applied = await play('bounce');
-            if (!applied || destroyed || options.action === 'auto') return;
-            interactionTimer = setTimeout(() => { if (!destroyed) play(options.action); }, 2000);
-        }
         function syncPause() {
             player.setPaused(suspended());
             menu.querySelector('[data-command="pause"]').textContent = options.paused ? '继续动画' : '暂停动画';
-            scheduleAuto();
+            scheduleActivity();
             callbacks.onHitAreaChange?.();
         }
         function closeMenu() { menu.hidden = true; syncPause(); }
@@ -250,7 +260,7 @@
             if (hit.hasPointerCapture(completed.id)) hit.releasePointerCapture(completed.id);
             lastDragged = didMove; layout(); syncPause();
             if (didMove) savePosition();
-            else if (!cancelled) { message('被你发现啦！'); interact(); callbacks.onActivate?.(); }
+            else if (!cancelled) { message('被你发现啦！'); callbacks.onActivate?.(); }
         }
 
         listen(hit, 'pointerdown', event => {
@@ -274,7 +284,7 @@
         listen(hit, 'lostpointercapture', event => { if (drag) finishDrag(event, true); });
         listen(hit, 'click', event => {
             event.stopPropagation();
-            if (event.detail === 0 && !lastDragged) { interact(); callbacks.onActivate?.(); }
+            if (event.detail === 0 && !lastDragged) { message('被你发现啦！'); callbacks.onActivate?.(); }
             lastDragged = false;
         });
         listen(hit, 'contextmenu', event => { event.preventDefault(); event.stopPropagation(); openMenu(event.clientX, event.clientY); });
@@ -293,7 +303,6 @@
         listen(menu, 'pointerdown', event => event.stopPropagation());
         listen(menu, 'change', () => {
             options.action = select.value; callbacks.onSettings?.({ 'my-pet-action': options.action });
-            clearTimeout(interactionTimer);
             closeMenu(); play(options.action === 'auto' ? 'idle' : options.action);
         });
         listen(menu, 'click', event => {
@@ -319,7 +328,7 @@
             } else options.position = previous.position;
             layout(); syncPause();
             if (previous.action !== options.action) {
-                clearTimeout(interactionTimer); play(options.action === 'auto' ? 'idle' : options.action);
+                play(options.action === 'auto' ? 'idle' : options.action);
             }
         }
         update(initial);
@@ -331,7 +340,7 @@
                 return !destroyed && (Boolean(drag) || !menu.hidden || document.elementFromPoint(x, y) === host);
             },
             destroy() {
-                destroyed = true; actionToken++; abort.abort(); clearTimeout(autoTimer); clearTimeout(hintTimer); clearTimeout(interactionTimer);
+                destroyed = true; actionToken++; abort.abort(); stopActivity(); clearTimeout(hintTimer);
                 player.destroy(); host.remove();
             }
         };

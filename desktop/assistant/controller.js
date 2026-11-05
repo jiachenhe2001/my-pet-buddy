@@ -81,7 +81,8 @@
     $('sessions').value = state.selectedId || '';
     $('phase').textContent = session?.phase || (connected ? '已连接，选择一个项目开始' : '还没有连接 Codex');
     $('status-dot').className = `status-dot ${session?.status || ''}`;
-    $('source').textContent = session ? { hook: '已接入会话', history: '历史会话', 'app-server': '小黑会话' }[session.source] || '' : '';
+    $('source').title = session?.historyError || '';
+    $('source').textContent = session?.historyError ? '会话同步中断，正在重试' : session ? { hook: '已接入会话', history: '历史会话', 'app-server': '小黑会话' }[session.source] || '' : '';
     $('connection-detail').textContent = state.connection.error || (connected ? '已连接 · 沿用本机 Codex 登录与配置' : '沿用 Codex 当前的登录与配置。');
     $('connect').textContent = state.connection.status === 'connecting' ? '正在连接…' : connected ? state.connection.authenticated === false ? '登录 Codex' : '刷新连接' : '连接 Codex';
     $('connect').disabled = state.connection.status === 'connecting';
@@ -95,7 +96,7 @@
     if (messageKey !== lastMessages) {
       $('messages').replaceChildren(...messages.map(message => {
         const node = text('article', '', `message ${message.role}`);
-        if (message.role === 'assistant') node.append(text('span', 'CODEX', 'message-label'));
+        if (message.role === 'assistant') node.append(text('span', message.phase === 'commentary' ? 'CODEX · 进度' : message.phase === 'final_answer' ? 'CODEX · 答复' : message.phase === 'partial_answer' ? 'CODEX · 答复（未完）' : 'CODEX', 'message-label'));
         node.append(document.createTextNode(message.text)); return node;
       }));
       lastMessages = messageKey; if (atBottom) requestAnimationFrame(scrollDown);

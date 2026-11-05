@@ -95,7 +95,7 @@ async function main() {
         await page.waitForFunction(() => document.querySelector('#my-pet-observer')?.shadowRoot.querySelector('canvas').dataset.frame);
         assert.equal(await canvas.evaluate(element => getComputedStyle(element).display), 'block');
         console.log('PASS: clean install displays the pet under hostile CSS and strict CSP');
-        await page.waitForFunction(() => document.querySelector('#my-pet-observer').shadowRoot.querySelector('canvas').dataset.action !== 'idle', null, { timeout: 15000 });
+        await page.waitForFunction(() => document.querySelector('#my-pet-observer').shadowRoot.querySelector('canvas').dataset.action !== 'idle', null, { timeout: 30000 });
         await page.waitForFunction(() => document.querySelector('#my-pet-observer').shadowRoot.querySelector('canvas').dataset.action === 'idle', null, { timeout: 10000 });
         console.log('PASS: automatic mode plays an activity and returns to idle');
 
@@ -160,9 +160,21 @@ async function main() {
             'wider actions must not permanently shift the saved anchor');
         point = await hitPoint();
         await page.mouse.click(point.x, point.y);
-        await page.waitForFunction(() => document.querySelector('#my-pet-observer').shadowRoot.querySelector('canvas').dataset.action === 'bounce');
+        await page.locator('#my-pet-observer .hint').waitFor({ state: 'visible' });
+        assert.equal(await canvas.getAttribute('data-action'), 'idle', 'click keeps the selected animation');
+        await page.locator('#my-pet-observer .hit').focus();
+        await page.keyboard.press('Enter');
+        assert.equal(await canvas.getAttribute('data-action'), 'idle', 'keyboard activation also preserves the animation');
+        console.log('PASS: dragging persists; click and keyboard activation show a hint without changing the action');
+
+        await choose('roll');
         await page.waitForFunction(() => document.querySelector('#my-pet-observer').shadowRoot.querySelector('canvas').dataset.action === 'idle');
-        console.log('PASS: dragging persists; click bounces then restores the selected action');
+        const restingSince = Date.now();
+        await page.waitForTimeout(9000);
+        assert.equal(await canvas.getAttribute('data-action'), 'idle', 'selected roll rests between complete cycles');
+        await page.waitForFunction(() => document.querySelector('#my-pet-observer').shadowRoot.querySelector('canvas').dataset.action === 'roll', null, { timeout: 4000 });
+        assert.ok(Date.now() - restingSince >= 9800, 'the next roll waits roughly ten seconds');
+        await choose('idle');
 
         const blank = await canvas.boundingBox();
         await page.evaluate(({ x, y }) => {

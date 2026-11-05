@@ -7,6 +7,7 @@ const { randomUUID } = require('node:crypto');
 const { CodexClient } = require('./CodexClient');
 const { HookBridge } = require('./HookBridge');
 const { resolveCodex } = require('./command');
+const { readHistory } = require('./history');
 
 const ACTIVE = new Set(['running', 'waiting_approval', 'waiting_input']);
 const bounded = (value, limit = 16000) => typeof value === 'string' ? value.slice(0, limit) : '';
@@ -15,7 +16,7 @@ const idKey = id => `${typeof id}:${id}`;
 
 class CodexService extends EventEmitter {
   constructor({ directory, hookCommand, codexHome = process.env.CODEX_HOME || path.join(os.homedir(), '.codex'),
-    binary = process.env.PET_BUDDY_CODEX_BIN || '', execute = execFile, bridge, clientFactory } = {}) {
+    binary = process.env.PET_BUDDY_CODEX_BIN || '', execute = execFile, bridge, clientFactory, pollInterval = 3000 } = {}) {
     super();
     this.binary = binary; this.execute = execute; this.codexHome = codexHome;
     this.clientFactory = clientFactory || (command => new CodexClient({ command }));
@@ -23,6 +24,8 @@ class CodexService extends EventEmitter {
     this.sessions = new Map(); this.items = new Map(); this.pending = new Map();
     this.controlled = new Set(); this.sending = new Set(); this.selectedId = null;
     this.connection = { status: 'disconnected', authenticated: null, error: null };
+    this.pollInterval = pollInterval; this.historyReads = new Map(); this.historyState = new Map();
+    this.listedAt = new Map(); this.hookHistoryAfter = new Map(); this.revisions = new Map(); this.attentionKeys = new Map(); this.attention = null;
     this.bridge.on('event', event => this._hookEvent(event));
     this.bridge.on('approval', event => this._hookApproval(event));
     this.bridge.on('expired', id => {
@@ -38,7 +41,7 @@ class CodexService extends EventEmitter {
     this._changed();
   }
   snapshot() {
-    return { connection: { ...this.connection }, selectedId: this.selectedId,
+    return { connection: { ...this.connection }, selectedId: this.selectedId, attention: this.attention,
       hooks: { installed: this.bridge.isInstalled(), error: this.bridgeError || null },
       sessions: [...this.sessions.values()].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 80).map(session => ({
         ...session, messages: session.id === this.selectedId ? session.messages.slice(-60) : [],
@@ -46,16 +49,31 @@ class CodexService extends EventEmitter {
       })) };
   }
   _changed() { this.emit('change', this.snapshot()); }
+  _attention(session, type, message = `${session.title} · ${session.phase}`, identity = '') {
+    const key = `${session.turnId || ''}:${type}:${identity}`;
+    if (this.attentionKeys.get(session.id) === key) return;
+    this.attentionKeys.set(session.id, key);
+    this.attention = { id: randomUUID(), sessionId: session.id, type, message, at: Date.now() };
+    this.emit('attention', this.attention);
+  }
+  _schedulePoll() {
+    clearTimeout(this.pollTimer);
+    if (!this.pollInterval || this.connection.status !== 'connected' || !this.client?.child) return;
+    this.pollTimer = setTimeout(() => {
+      this.refresh().catch(() => {}).finally(() => this._schedulePoll());
+    }, this.pollInterval);
+    this.pollTimer.unref?.();
+  }
   _session(id, values = {}) {
     if (!this.sessions.has(id)) this.sessions.set(id, { id, title: 'Codex 会话', cwd: '', source: 'app-server',
       status: 'idle', phase: '', activity: '', messages: [], plan: [], turnId: null });
     const session = this.sessions.get(id); Object.assign(session, values); session.updatedAt = Date.now(); return session;
   }
-  _message(session, role, text, id = randomUUID()) {
+  _message(session, role, text, id = randomUUID(), phase) {
     if (!text) return;
     const previous = session.messages.find(message => message.id === id);
-    if (previous) previous.text = bounded(text, 100000);
-    else session.messages.push({ id, role, text: bounded(text, 100000) });
+    if (previous) { previous.text = bounded(text, 100000); if (phase) previous.phase = phase; }
+    else session.messages.push({ id, role, text: bounded(text, 100000), ...(phase ? { phase } : {}) });
     session.messages = session.messages.slice(-60);
     let total = session.messages.reduce((sum, message) => sum + message.text.length, 0);
     while (total > 200000 && session.messages.length > 1) total -= session.messages.shift().text.length;
@@ -81,6 +99,7 @@ class CodexService extends EventEmitter {
       client.on('disconnected', error => {
         if (this.client !== client) return;
         this.connection = { status: 'disconnected', authenticated: null, error: error.message };
+        clearTimeout(this.pollTimer); this.historyReads.clear();
         for (const [id, request] of this.pending) if (request.source === 'native') this.pending.delete(id);
         for (const id of this.controlled) {
           const session = this.sessions.get(id);
@@ -92,21 +111,105 @@ class CodexService extends EventEmitter {
       for (const session of this.sessions.values()) if (session.source === 'app-server' && session.status === 'disconnected') {
         session.status = 'idle'; session.turnId = null; session.phase = '连接已恢复，请核对上轮结果后继续';
       }
-      await this.refresh(); return this.snapshot();
+      await this.refresh(); this._schedulePoll(); return this.snapshot();
     } catch (error) {
       this.client?.stop(); this.connection = { status: 'error', authenticated: null, error: error.message }; this._changed(); throw error;
     }
   }
   async refresh() {
-    if (!this.client?.child) throw new Error('请先连接本机 Codex。');
-    const result = await this.client.request('thread/list', { limit: 50, sortKey: 'updated_at', sortDirection: 'desc', archived: false });
-    for (const thread of result.data || []) if (!this.sessions.has(thread.id)) {
-      const session = this._session(thread.id, { source: 'history', cwd: thread.cwd || '',
-        title: bounded(thread.name || thread.preview || path.basename(thread.cwd || '') || 'Codex 会话', 100),
-        phase: '历史会话 · 接入 hooks 后显示实时状态' });
-      if (typeof thread.updatedAt === 'number') session.updatedAt = thread.updatedAt * (thread.updatedAt < 1e12 ? 1000 : 1);
+    if (this.refreshing) return this.refreshing;
+    this.refreshing = this._refresh().finally(() => { this.refreshing = null; });
+    return this.refreshing;
+  }
+  async _refresh() {
+    const client = this.client;
+    if (!client?.child) throw new Error('请先连接本机 Codex。');
+    const result = await client.request('thread/list', { limit: 50, sortKey: 'updated_at', sortDirection: 'desc', archived: false });
+    if (this.client !== client || !client.child) return this.snapshot();
+    const candidates = new Set();
+    for (const thread of result.data || []) {
+      const fresh = !this.sessions.has(thread.id);
+      const session = fresh ? this._session(thread.id, { source: 'history', phase: '正在同步会话' }) : this.sessions.get(thread.id);
+      session.cwd = thread.cwd || session.cwd;
+      session.title = bounded(thread.name || thread.preview || path.basename(session.cwd) || session.title, 100);
+      const stamp = typeof thread.updatedAt === 'number' ? thread.updatedAt * (thread.updatedAt < 1e12 ? 1000 : 1) : 0;
+      if (stamp && !this.controlled.has(session.id)) session.updatedAt = stamp;
+      if (!this.controlled.has(session.id) && (fresh || !this.listedAt.has(thread.id) || this.listedAt.get(thread.id) !== stamp)) candidates.add(thread.id);
+      // Record the listing only after a successful history read, so failures retry.
+      session.listStamp = stamp;
     }
-    this._changed(); return this.snapshot();
+    for (const session of this.sessions.values()) {
+      if (!this.controlled.has(session.id) && (session.id === this.selectedId || ACTIVE.has(session.status))) candidates.add(session.id);
+    }
+    // Bound IO concurrency even with a large existing session list.
+    const ids = [...candidates];
+    const results = await Promise.allSettled(Array.from({ length: Math.min(3, ids.length) }, async () => {
+      while (ids.length && this.client === client && client.child) {
+        const id = ids.shift();
+        try { await this._syncHistory(id, id === this.selectedId); } catch { /* Error is shown on the session and retried. */ }
+      }
+    }));
+    for (const result of results) if (result.status === 'rejected') throw result.reason;
+    if (this.client === client && client.child) this._changed();
+    return this.snapshot();
+  }
+  async _syncHistory(id, messages = true) {
+    const existing = this.historyReads.get(id);
+    if (existing) {
+      await existing.promise;
+      if (messages && !existing.messages) return this._syncHistory(id, true);
+      return;
+    }
+    const client = this.client, session = this.sessions.get(id);
+    if (!client?.child || !session) return;
+    const revision = this.revisions.get(id), turnId = session.turnId, stamp = session.listStamp;
+    const entry = { messages };
+    entry.promise = (async () => {
+      try {
+        const result = await readHistory(client, id, { messages });
+        if (this.client !== client || !client.child || this.revisions.get(id) !== revision || session.turnId !== turnId || this.controlled.has(id)) return;
+        const latest = result.latest, previous = this.historyState.get(id);
+        const afterTurn = this.hookHistoryAfter.get(id);
+        if (afterTurn && latest?.id === afterTurn) return;
+        if (afterTurn && latest?.id) this.hookHistoryAfter.delete(id);
+        // Hooks may arrive before Codex flushes its history to disk.
+        if (session.source === 'hook' && ACTIVE.has(session.status) && session.turnId && latest?.id !== session.turnId) return;
+        const terminal = ['completed', 'failed', 'interrupted'];
+        if (latest && previous?.turnId === latest.id && terminal.includes(previous.status) && latest.status === 'inProgress') return;
+        if (messages) {
+          const queued = session.messages.filter(message => message.id.startsWith('queued:') && !result.items.some(item =>
+            item.type === 'userMessage' && (item.content || []).filter(part => part.type === 'text').map(part => part.text).join('\n') === message.text));
+          session.messages = [];
+          for (const item of result.items) this._hydrate(session, item);
+          for (const message of queued) session.messages.push(message);
+        }
+        session.historyError = null; session.syncedAt = Date.now();
+        if (stamp !== undefined) this.listedAt.set(id, stamp);
+        if (!latest?.status) { this._changed(); return; }
+        const status = latest.status === 'inProgress' ? 'running' : terminal.includes(latest.status) ? latest.status : null;
+        if (!status) { this._changed(); return; }
+        const hasRequest = [...this.pending.values()].some(request => request.sessionId === id);
+        if (!hasRequest) {
+          session.turnId = latest.id; session.status = status;
+          session.phase = { running: 'Codex 正在处理', completed: '本轮已完成', failed: '本轮遇到问题', interrupted: '本轮已停止' }[status];
+          if (status !== 'running') { session.activity = ''; session.plan = []; }
+          if (latest.error?.message) this._message(session, 'system', latest.error.message, `error:${latest.id}`);
+        }
+        this.historyState.set(id, { turnId: latest.id, status });
+        // Initial history is a baseline; only subsequently observed endings notify.
+        if (!hasRequest && terminal.includes(status) && previous &&
+            (previous.turnId !== latest.id || previous.status === 'running' || previous.status === 'inProgress')) this._attention(session, status);
+        this._changed();
+      } catch (error) {
+        if (this.client === client && client.child && this.revisions.get(id) === revision) {
+          session.historyError = '会话同步暂时失败，将自动重试。'; this._changed();
+        }
+        throw error;
+      }
+    })();
+    this.historyReads.set(id, entry);
+    try { return await entry.promise; }
+    finally { if (this.historyReads.get(id) === entry) this.historyReads.delete(id); }
   }
   async login() {
     if (!this.client?.child) await this.connect();
@@ -122,22 +225,13 @@ class CodexService extends EventEmitter {
   }
   async select(id) {
     if (typeof id !== 'string' || !this.sessions.has(id)) throw new Error('会话不存在，请刷新列表。');
-    this.selectedId = id; this._changed(); const session = this.sessions.get(id);
-    if (this.client?.child && !session.messages.length) {
-      try {
-        // Read history without resuming or taking over another live process.
-        await this.client.request('thread/read', { threadId: id, includeTurns: false });
-        const result = await this.client.request('thread/turns/list', { threadId: id, limit: 6, sortDirection: 'desc' });
-        for (const turn of [...(result.data || [])].reverse()) {
-          const items = await this.client.request('thread/items/list', { threadId: id, turnId: turn.id, limit: 20, sortDirection: 'desc' });
-          for (const entry of [...(items.data || [])].reverse()) this._hydrate(session, entry.item || entry);
-        }
-        this._changed();
-      } catch { /* Older Codex and hooks-only sessions can still show new events. */ }
+    this.selectedId = id; this._changed();
+    if (this.client?.child && !this.controlled.has(id)) {
+      try { await this._syncHistory(id, true); } catch { /* Keep the existing messages and expose the retry status. */ }
     }
   }
   _hydrate(session, item) {
-    if (item.type === 'agentMessage') this._message(session, 'assistant', item.text, item.id);
+    if (item.type === 'agentMessage') this._message(session, 'assistant', item.text, item.id, item.phase);
     if (item.type === 'userMessage') this._message(session, 'user', (item.content || []).filter(part => part.type === 'text').map(part => part.text).join('\n'), item.id);
   }
   async send({ sessionId, text }) {
@@ -172,7 +266,7 @@ class CodexService extends EventEmitter {
         { env: this.command.env, windowsHide: true, timeout: 20000, maxBuffer: 256000 }, (error, stdout, stderr) => {
           if (error) { reject(new Error('这个 Codex 版本未能接收队列消息。请更新 CLI，或回原会话继续。')); return; }
           const warning = /warn|failed|unable|could not|失败|未能/i.test(`${stdout}\n${stderr}`);
-          this._message(session, 'user', text);
+          this._message(session, 'user', text, `queued:${randomUUID()}`);
           this._message(session, 'system', warning ? '消息已排队，但未确认成功恢复。请检查原 Codex 会话。' : '消息已交给 Codex 队列，等待原会话处理。');
           this._changed(); resolve({ queued: true, resumed: !warning });
         });
@@ -192,6 +286,7 @@ class CodexService extends EventEmitter {
       return;
     }
     const id = params.threadId || params.thread?.id; if (!id) return;
+    this.revisions.set(id, (this.revisions.get(id) || 0) + 1);
     const session = this._session(id), item = params.item;
     if (params.thread) {
       session.cwd = params.thread.cwd || session.cwd;
@@ -200,7 +295,7 @@ class CodexService extends EventEmitter {
     if (method === 'thread/started') { this.controlled.add(id); session.source = 'app-server'; }
     if (session.source === 'hook' && !this.controlled.has(id)) return;
     if (method === 'turn/started') {
-      this._clearSessionRequests(id); session.turnId = params.turn.id; session.status = 'running';
+      this.attentionKeys.delete(id); this._clearSessionRequests(id); session.turnId = params.turn.id; session.status = 'running';
       session.phase = '正在处理'; session.activity = ''; session.plan = [];
     } else if (method === 'thread/status/changed' && params.status?.type === 'active') {
       const flags = params.status.activeFlags || [];
@@ -224,8 +319,9 @@ class CodexService extends EventEmitter {
       this._clearSessionRequests(id);
       session.status = params.turn.status === 'completed' ? 'completed' : params.turn.status === 'interrupted' ? 'interrupted' : 'failed';
       session.phase = { completed: '本轮已完成', interrupted: '本轮已停止', failed: '本轮遇到问题' }[session.status];
+      session.activity = ''; session.plan = [];
       if (params.turn.error?.message) this._message(session, 'system', params.turn.error.message);
-      this.emit('attention', { sessionId: id, type: session.status, message: `${session.title} · ${session.phase}` });
+      this._attention(session, session.status);
     } else if (method === 'error') {
       session.activity = bounded(params.error?.message || 'Codex 返回错误');
       if (!params.willRetry) session.phase = '遇到问题，等待 Codex 最终状态';
@@ -250,18 +346,22 @@ class CodexService extends EventEmitter {
       canAccept: (['input', 'permissions'].includes(kind) || Boolean(detail)) && (!Array.isArray(params.availableDecisions) || params.availableDecisions.includes('accept')) };
     this.pending.set(id, { source: 'native', sessionId: session.id, turnId: params.turnId, rpcId, epoch, method, params, publicRequest });
     session.status = kind === 'input' ? 'waiting_input' : 'waiting_approval'; session.phase = publicRequest.title;
-    this.selectedId = session.id; this._changed(); this.emit('attention', { sessionId: session.id, type: session.status, message: publicRequest.title });
+    this.revisions.set(session.id, (this.revisions.get(session.id) || 0) + 1);
+    this.selectedId = session.id; this._attention(session, session.status, publicRequest.title, publicRequest.id); this._changed();
   }
   _hookEvent(event) {
     const id = event.session_id; if (this.controlled.has(id)) return;
     const previous = this.sessions.get(id);
     if (previous?.turnId && event.turn_id && previous.turnId !== event.turn_id && ['Stop', 'Interrupt', 'PostToolUse'].includes(event.hook_event_name)) return;
+    this.revisions.set(id, (this.revisions.get(id) || 0) + 1);
     const session = this._session(id, { source: 'hook', cwd: bounded(event.cwd), turnId: event.turn_id || null });
     if (event.cwd) session.title = path.basename(event.cwd) || '终端 Codex';
     const type = event.hook_event_name;
     if (type === 'SessionStart') { session.status = 'idle'; session.phase = 'Codex 会话已接入'; }
     if (type === 'UserPromptSubmit') {
-      this._clearSessionRequests(id); session.status = 'running'; session.phase = 'Codex 正在处理'; this._message(session, 'user', bounded(event.prompt));
+      const history = this.historyState.get(id);
+      if (!event.turn_id && history?.status === 'completed') this.hookHistoryAfter.set(id, history.turnId);
+      this.attentionKeys.delete(id); this._clearSessionRequests(id); session.status = 'running'; session.phase = 'Codex 正在处理'; this._message(session, 'user', bounded(event.prompt));
     }
     if (['PreToolUse', 'PostToolUse'].includes(type)) {
       session.status = 'running'; session.phase = type === 'PreToolUse' ? `正在调用 ${bounded(event.tool_name, 80)}` : '操作返回，继续处理';
@@ -272,7 +372,8 @@ class CodexService extends EventEmitter {
       session.status = type === 'Stop' ? 'completed' : type === 'Interrupt' ? 'interrupted' : 'disconnected';
       session.phase = type === 'Stop' ? '本轮已完成' : type === 'Interrupt' ? '本轮已停止' : 'Codex 会话已结束';
       this._message(session, 'assistant', event.last_assistant_message);
-      if (type === 'Stop') this.emit('attention', { sessionId: id, type: 'completed', message: `${session.title} · 本轮已完成` });
+      session.activity = ''; session.plan = [];
+      if (type === 'Stop') this._attention(session, 'completed');
     }
     if (!this.selectedId) this.selectedId = id; this._changed();
   }
@@ -287,7 +388,8 @@ class CodexService extends EventEmitter {
     const publicRequest = { id, kind: 'command', title: '允许这次 Codex 操作？', reason: bounded(event.tool_input?.description), detail,
       context: `${session.title} · ${session.cwd}`, canAccept: Boolean(detail && detail !== '{}') };
     this.pending.set(id, { source: 'hook', sessionId: session.id, turnId: session.turnId, bridgeId, publicRequest });
-    this.selectedId = session.id; this._changed(); this.emit('attention', { sessionId: session.id, type: session.status, message: publicRequest.title });
+    this.revisions.set(session.id, (this.revisions.get(session.id) || 0) + 1);
+    this.selectedId = session.id; this._attention(session, session.status, publicRequest.title, publicRequest.id); this._changed();
   }
   respond({ id, decision, answers }) {
     const request = this.pending.get(id);
@@ -331,6 +433,6 @@ class CodexService extends EventEmitter {
     const result = this.bridge.install(enabled); this._changed(); return result;
   }
   hasActiveTasks() { return [...this.controlled].some(id => ACTIVE.has(this.sessions.get(id)?.status)); }
-  stop() { this.bridge.stop(); this.client?.stop(); }
+  stop() { clearTimeout(this.pollTimer); this.pollInterval = 0; this.bridge.stop(); this.client?.stop(); }
 }
 module.exports = { CodexService };

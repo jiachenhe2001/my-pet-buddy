@@ -7,6 +7,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync, spawn } = require('node:child_process');
 const { assistantFlow } = require('./assistant-flow.cjs');
+const { forwardHook } = require('../desktop/src/codex/hook-client');
 
 async function main() {
     const source = path.resolve(__dirname, '..');
@@ -208,13 +209,22 @@ async function main() {
         if (app) {
             const assistant = app.windows().find(page => /\/assistant\/assistant.html$/.test(page.url()));
             assert.ok(assistant, 'assistant uses a separate focusable native window');
+            assert.equal(await overlay.locator('#assistant-status').isVisible(), false, 'no permanent Codex label');
             const show = async () => {
                 await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(win => win.webContents.getURL().includes('/assistant/assistant.html')).show());
                 await assistant.bringToFront();
             };
             await show();
             assert.equal(await assistant.evaluate(() => typeof require), 'undefined');
-            await assistantFlow(assistant, { artifacts, infoPath: path.join(profile, 'codex-hook-bridge.json'), cwd: root, show,
+            await assistantFlow(assistant, { artifacts,
+                onCompleted: async () => {
+                    await overlay.waitForFunction(() => {
+                        const badge = document.querySelector('#assistant-status');
+                        return !badge.hidden && badge.textContent.includes('本轮已完成');
+                    });
+                    await overlay.waitForFunction(() => document.querySelector('#assistant-status').hidden, null, { timeout: 10000 });
+                    assert.equal(await assistant.locator('#composer').isVisible(), true);
+                }, infoPath: path.join(profile, 'codex-hook-bridge.json'), cwd: root, show,
                 hookProcess: event => new Promise((resolve, reject) => {
                     const child = spawn(require('../desktop/node_modules/electron'), ['--no-sandbox', path.join(root, 'desktop/main.js'), '--pet-buddy-hook', path.join(profile, 'codex-hook-bridge.json')], {
                         env: { ...process.env, CODEX_HOME: path.join(profile, 'codex') }, stdio: ['pipe', 'pipe', 'pipe']
@@ -229,6 +239,15 @@ async function main() {
                     });
                     child.stdin.end(JSON.stringify(event));
                 }) });
+            await assistant.evaluate(() => petBuddy.assistant.hide());
+            const background = { session_id: 'background-notice', turn_id: 'background-turn', cwd: root };
+            await forwardHook({ infoPath: path.join(profile, 'codex-hook-bridge.json'), input: { ...background, hook_event_name: 'UserPromptSubmit', prompt: '后台通知检查' } });
+            await forwardHook({ infoPath: path.join(profile, 'codex-hook-bridge.json'), input: { ...background, hook_event_name: 'Stop', last_assistant_message: '后台检查完成' } });
+            await overlay.waitForFunction(() => {
+                const badge = document.querySelector('#assistant-status');
+                return !badge.hidden && badge.textContent.includes('本轮已完成');
+            });
+            assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(win => win.webContents.getURL().includes('/assistant/assistant.html')).isVisible()), false, 'completion does not reopen a hidden conversation');
             assert.deepEqual(errors, []); assert.deepEqual(network, []);
             console.log('PASS: native assistant preload/IPC, stdio approvals, terminal hook executable, continued input and window hiding');
         }

@@ -48,7 +48,7 @@ class AppController {
       });
       this.codex.on('attention', event => {
         const needsInput = ['waiting_approval', 'waiting_input'].includes(event.type);
-        if (this.store.get('enabled')) {
+        if (needsInput && this.store.get('enabled')) {
           this.codex.select(event.sessionId).catch(() => {});
           this.assistantWindow.show({ focus: false });
         }
