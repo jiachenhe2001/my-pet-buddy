@@ -4,7 +4,7 @@
     let settings = await api.settings.getAll();
     let pet = null, petId = null, cursor = { x: -1, y: -1 }, interactive = false;
     const badge = document.getElementById('assistant-status');
-    let assistantState = null, previousAnchor = '';
+    let assistantState = null, previousAnchor = '', badgeTimer = null;
     function placeBadge() {
         const rect = document.querySelector('#my-pet-observer')?.shadowRoot.querySelector('canvas')?.getBoundingClientRect();
         if (!rect) return;
@@ -15,11 +15,16 @@
         badge.style.top = `${Math.max(3, rect.y - 27)}px`;
     }
     function renderBadge() {
-        const session = assistantState?.sessions.find(item => ['waiting_approval', 'waiting_input'].includes(item.status))
-            || assistantState?.sessions.find(item => item.id === assistantState.selectedId);
-        badge.hidden = !settings.enabled || !session;
-        badge.textContent = session ? { running: 'Codex · 正在处理', waiting_approval: '有个操作需要你确认', waiting_input: 'Codex 有个问题想问你', completed: 'Codex · 本轮已完成', failed: 'Codex · 遇到问题', disconnected: 'Codex · 已断开', interrupted: 'Codex · 已停止', idle: 'Codex · 等待新任务' }[session.status] || 'Codex' : '';
-        badge.classList.toggle('attention', ['waiting_approval', 'waiting_input'].includes(session?.status));
+        clearTimeout(badgeTimer);
+        const attention = assistantState?.attention;
+        const session = assistantState?.sessions.find(item => item.id === attention?.sessionId);
+        const remaining = attention ? attention.at + 7000 - Date.now() : 0;
+        const waiting = ['waiting_approval', 'waiting_input'].includes(attention?.type);
+        // No permanent idle/running label; reminders expire even as progress streams.
+        badge.hidden = !settings.enabled || !session || remaining <= 0 || session.status !== attention.type || (waiting && !session.pending?.length);
+        badge.textContent = attention?.message || '';
+        badge.classList.toggle('attention', waiting);
+        if (!badge.hidden) badgeTimer = setTimeout(renderBadge, remaining);
         placeBadge(); hitTest();
     }
     const getURL = path => new URL(`../assets/${path}`, location.href).href;
@@ -52,9 +57,13 @@
     const removeCursor = api.overlay.onCursor(point => { cursor = point; hitTest(); });
     window.addEventListener('mousemove', event => { cursor = { x: event.clientX, y: event.clientY }; hitTest(); });
     document.addEventListener('visibilitychange', hitTest);
-    badge.addEventListener('click', () => api.assistant?.toggle());
+    badge.addEventListener('click', async () => {
+        const id = assistantState?.attention?.sessionId;
+        if (id) await api.assistant?.select(id);
+        api.assistant?.toggle();
+    });
     const removeAssistant = api.assistant?.onChange(snapshot => { assistantState = snapshot; renderBadge(); });
     api.assistant?.getState().then(snapshot => { assistantState = snapshot; renderBadge(); }).catch(() => {});
-    window.addEventListener('beforeunload', () => { removeSettings(); removeCursor(); removeAssistant?.(); pet?.destroy(); api.overlay.setInteractive(false); });
+    window.addEventListener('beforeunload', () => { clearTimeout(badgeTimer); removeSettings(); removeCursor(); removeAssistant?.(); pet?.destroy(); api.overlay.setInteractive(false); });
     render();
 })();

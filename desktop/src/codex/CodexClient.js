@@ -37,7 +37,7 @@ class CodexClient extends EventEmitter {
     child.stderr.on('data', () => {});
     child.on('error', error => this._closed(child, new Error(`无法启动 Codex：${error.message}`)));
     child.on('exit', (code, signal) => this._closed(child, new Error(`Codex 连接已结束（${signal || code || 0}）。`)));
-    await this.request('initialize', { clientInfo: { name: 'my_pet_buddy', title: '小黑助手', version: '1.5.0' }, capabilities: {} });
+    await this.request('initialize', { clientInfo: { name: 'my_pet_buddy', title: '小黑助手', version: '1.5.1' }, capabilities: {} });
     this.notify('initialized');
   }
   _message(message, epoch) {

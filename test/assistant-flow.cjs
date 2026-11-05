@@ -3,7 +3,7 @@ const path = require('node:path');
 const { forwardHook } = require('../desktop/src/codex/hook-client');
 
 // Shared browser/native UI exercise. Codex is a real stdio fixture process.
-async function assistantFlow(page, { artifacts, infoPath, cwd, compact = false, show = async () => {}, hookProcess }) {
+async function assistantFlow(page, { artifacts, infoPath, cwd, compact = false, show = async () => {}, hookProcess, onCompleted = async () => {} }) {
   await page.locator('#empty-connect').click();
   await page.waitForFunction(() => document.querySelector('#empty-connect').textContent.includes('选择项目'));
   await page.locator('#empty-connect').click();
@@ -19,6 +19,7 @@ async function assistantFlow(page, { artifacts, infoPath, cwd, compact = false, 
   await page.screenshot({ path: path.join(artifacts, 'assistant-approval.png') });
   await page.getByRole('button', { name: '允许此次', exact: true }).click(); await completed();
   assert.match(await page.locator('#messages').textContent(), /已经完成检查/);
+  await onCompleted();
   await page.screenshot({ path: path.join(artifacts, 'assistant-completed.png') });
   await send('再检查一次'); await page.locator('#approval').waitFor({ state: 'visible' });
   await page.getByRole('button', { name: '拒绝', exact: true }).click(); await completed();

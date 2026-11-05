@@ -6,9 +6,10 @@ class OverlayWindowManager {
 
   create() {
     this._interactive = false;
-    const { workArea } = screen.getPrimaryDisplay();
+    const area = overlayBounds(screen.getPrimaryDisplay());
     this.win = new BrowserWindow({
-      x: workArea.x, y: workArea.y, width: workArea.width, height: workArea.height,
+      ...area,
+      ...(process.platform === 'darwin' ? { type: 'panel', enableLargerThanScreen: true } : {}),
       transparent: true, frame: false, resizable: false, movable: false,
       focusable: false, skipTaskbar: true, hasShadow: false, alwaysOnTop: true,
       webPreferences: {
@@ -46,10 +47,9 @@ class OverlayWindowManager {
     return this.win;
   }
 
-  applyDisplayBounds() {
+  applyDisplayBounds(display = screen.getPrimaryDisplay()) {
     if (!this.win) return;
-    const { workArea } = screen.getPrimaryDisplay();
-    this.win.setBounds(workArea);
+    this.win.setBounds(overlayBounds(display));
   }
 
   setInteractive(bool) {
@@ -63,4 +63,8 @@ class OverlayWindowManager {
   hide() { if (this.win) this.win.hide(); }
 }
 
-module.exports = { OverlayWindowManager };
+// macOS workArea excludes the Dock; the transparent pet layer uses the screen.
+function overlayBounds(display, platform = process.platform) {
+  return { ...(platform === 'darwin' ? display.bounds : display.workArea) };
+}
+module.exports = { OverlayWindowManager, overlayBounds };
