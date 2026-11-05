@@ -20,4 +20,8 @@ Desktop：在 `desktop/` 执行 `npm ci`、`npm test`，再运行 `npm run dist:
 共享脚本、样式与素材会自动复制到 `desktop/assets/`，安装包生成到 `desktop/release/`。
 这些本地打包命令不自动上传；应用本身也不自动检查更新。
 
+macOS 构建明确使用 `macos-15-intel` runner，`dist:mac` 仍生成同时包含 Intel / Apple Silicon 的 universal DMG。
+
+修改发布工作流本身也会触发版本检查，便于修复构建环境后重试未发布版本；已公开版本仍会跳过。
+
 原有 Desktop checks / Desktop installers 工作流仍可独立构建 Actions artifacts。

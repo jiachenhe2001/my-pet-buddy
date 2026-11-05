@@ -3,7 +3,7 @@ name: Publish version
 on:
   push:
     branches: [main]
-    paths: ['manifest.json']
+    paths: ['manifest.json', '.github/workflows/release.yml']
   workflow_dispatch:
 
 permissions:
@@ -86,7 +86,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
+          - os: macos-15-intel
             script: dist:mac
             artifact: release-macos
             file: desktop/release/*.dmg
