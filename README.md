@@ -48,3 +48,6 @@ Chrome 与 Desktop 共用 [`pets.js`](pets.js) 形象注册表和 [`popup-contro
 ## 许可证
 
 保留 [MIT LICENSE](LICENSE) 及桌面安装器许可证，源文件中的版权归属继续有效。
+## 小黑助手（桌面版）
+
+桌面版新增本机 Codex 状态、完成提醒、继续任务与逐次授权气泡，沿用 Codex 的 ChatGPT 登录。MiniMax 问答入口将在下一阶段接入。使用方法见 [桌面版说明](desktop/README.md#小黑助手本机-codex)。

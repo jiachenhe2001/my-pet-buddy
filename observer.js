@@ -250,7 +250,7 @@
             if (hit.hasPointerCapture(completed.id)) hit.releasePointerCapture(completed.id);
             lastDragged = didMove; layout(); syncPause();
             if (didMove) savePosition();
-            else if (!cancelled) { message('被你发现啦！'); interact(); }
+            else if (!cancelled) { message('被你发现啦！'); interact(); callbacks.onActivate?.(); }
         }
 
         listen(hit, 'pointerdown', event => {
@@ -274,7 +274,7 @@
         listen(hit, 'lostpointercapture', event => { if (drag) finishDrag(event, true); });
         listen(hit, 'click', event => {
             event.stopPropagation();
-            if (event.detail === 0 && !lastDragged) interact();
+            if (event.detail === 0 && !lastDragged) { interact(); callbacks.onActivate?.(); }
             lastDragged = false;
         });
         listen(hit, 'contextmenu', event => { event.preventDefault(); event.stopPropagation(); openMenu(event.clientX, event.clientY); });

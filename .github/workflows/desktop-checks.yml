@@ -12,6 +12,7 @@ on:
       - 'icons/**'
       - 'package*.json'
       - 'test/desktop.cjs'
+      - 'test/assistant-flow.cjs'
       - 'test/fixtures/**'
       - '.github/workflows/desktop-checks.yml'
   workflow_dispatch:
