@@ -10,7 +10,7 @@ It takes about a minute.
 ## 1. Download
 
 Download the installer: **`MyPetBuddy-Setup-<version>.exe`**
-(from whoever shared it with you, or from the [Desktop checks 构建的 desktop-windows artifact](https://github.com/jiachenhe2001/my-pet-buddy/actions/workflows/desktop-checks.yml)).
+from the [latest GitHub Release](https://github.com/jiachenhe2001/my-pet-buddy/releases/latest). Quit the running app from the tray before updating, then install to the same location to keep your local settings.
 
 ---
 
@@ -50,7 +50,7 @@ A **Desktop shortcut** and a **Start Menu** entry are created automatically.
 ### Using it
 - **Left-click** the tray icon → opens the little settings popover （形象、动作、大小、暂停、重置位置和主题）.
 - **Right-click** the tray icon → quick menu: **Show/Hide Pet**, **Settings**, **Launch at Login**, **Quit**.
-- 默认显示小黑；单击蹦跶，拖动调整位置，右键切换动作。
+- 默认显示小黑；拖动调整位置，右键切换动作。单击小黑或托盘「小黑助手…」打开 Codex 气泡，连接本机 Codex CLI 后查看和继续任务。
 
 ---
 

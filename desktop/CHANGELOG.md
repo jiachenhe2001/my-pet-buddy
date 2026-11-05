@@ -1,8 +1,7 @@
 # Changelog — My Pet Buddy (Desktop)
 
 All notable changes to the **desktop app** are documented here.
-This is separate from the browser extension (see the repo root) — the two ship
-independently and have their own version numbers.
+Since 1.4.0, desktop and the browser extension share a release version.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -13,6 +12,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 暂无。
+
+## [1.5.0] - 2026-11-05
+
+### Added
+- 小黑头顶助手气泡：本机 Codex 会话、真实步骤、回复和完成提醒。
+- 继续输入、运行中追加要求、中断当前轮，以及逐次授权、拒绝和回答提问。
+- 已有 Codex 会话的 hooks 接入；沿用 ChatGPT 登录，不需要 OpenAI API Key。
+- MiniMax 问答独立入口，API 待下一阶段接入。
+
+### Changed
+- 保留原动画、拖动、右键菜单与本地设置；收起气泡后任务继续运行。
+- 授权绑定连接、会话与轮次，断线或超时回到 Codex 原确认流程。
+- macOS universal / Windows x64 安装包包含新增助手界面和本机后端。
 
 ## [1.4.0] - 2026-10-20
 
@@ -45,6 +57,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Notes
 - Builds are currently **unsigned** — first launch shows a one-time OS prompt (macOS: right-click → Open; Windows: More info → Run anyway). Code signing is planned.
 
-[Unreleased]: https://github.com/jiachenhe2001/my-pet-buddy/compare/v1.0.4...HEAD
+[Unreleased]: https://github.com/jiachenhe2001/my-pet-buddy/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/jiachenhe2001/my-pet-buddy/releases/tag/v1.5.0
+[1.4.0]: https://github.com/jiachenhe2001/my-pet-buddy/releases/tag/v1.4.0
 [1.0.4]: https://github.com/jiachenhe2001/my-pet-buddy/releases/tag/v1.0.4
 
