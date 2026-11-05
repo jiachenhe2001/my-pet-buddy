@@ -60,3 +60,17 @@ Linux CI 使用 `xvfb-run --auto-servernum npm run test:desktop`。
 
 MIT licensed — see [LICENSE](../LICENSE).
 
+## 小黑助手：本机 Codex
+
+点击小黑或托盘右键菜单的「小黑助手…」打开暖白气泡。可以查看任务状态、真实步骤计划和回复，收到完成提醒，继续发消息、停止当前轮，或逐次点击「允许此次 / 拒绝」。拖动、右键动作菜单和原有动画继续可用。
+
+1. 本机需有 **Codex CLI**，并已用 ChatGPT 账号登录。小黑沿用这个登录与配置，适用于你的 Plus 用量，不需要 OpenAI API Key。只有 Codex 桌面应用而未安装 CLI 时，还需要安装 CLI。
+2. 启动桌宠，在气泡连接设置里点击「连接 Codex」。找不到程序时点击「选择程序」指定 `codex` / `codex.exe` / npm 的 `codex.cmd`。
+3. 点击「＋」选择本机项目目录，新建小黑控制的 Codex 任务。运行中可追加要求；需要确认时，气泡展示具体操作与按钮。收起气泡不会结束任务。
+4. 要接入已有 Codex 会话，点击「接入已有会话」。这会合并并备份用户级 `~/.codex/hooks.json`。在 CLI 的 `/hooks`（桌面端 Settings > Hooks）审阅并信任新增 hooks，重启尚未载入配置的旧会话。移除接入只删除小黑添加的条目。
+
+历史会话不代表实时运行状态。已有会话的后续消息使用 Codex 的 queue；若没有可恢复的本机 daemon，界面会提示消息已排队但未确认恢复，需要回原 Codex 会话继续。不会另起一个进程接管正在运行的会话。较旧 CLI 缺少这些能力时请更新 CLI。
+
+问答标签先保留 MiniMax 入口，当前明确禁用发送，下一阶段再接你的 MiniMax API。问答不会被误发成 Codex 任务。
+
+验证：根目录运行 `npm test`、`npm run test:assistant`、`npm run test:desktop`，以及 `npm test --prefix desktop`。原生 Electron 测试在 Linux 上需要 `xvfb-run --auto-servernum npm run test:desktop`。测试使用独立临时配置和模拟协议服务，不消耗模型额度。完整交互与接入设计见 [companion-design.md](../docs/companion-design.md)。

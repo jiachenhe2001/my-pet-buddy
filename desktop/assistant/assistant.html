@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>小黑助手</title>
+  <link rel="stylesheet" href="assistant.css">
+</head>
+<body>
+  <main id="bubble">
+    <header>
+      <span class="avatar" aria-hidden="true">✦</span>
+      <div class="identity"><h1>小黑</h1><p>在这里，陪你一起</p></div>
+      <button id="preferences-toggle" class="icon-button" aria-label="连接设置" aria-expanded="false" title="连接设置">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="m9.5 4 .5-2h4l.5 2 2 1.2 2-.6 2 3.5-1.5 1.5v2.4l1.5 1.5-2 3.5-2-.6-2 1.2-.5 2h-4l-.5-2-2-1.2-2 .6-2-3.5 1.5-1.5V9.7L3.5 8.2l2-3.5 2 .6Z"/><circle cx="12" cy="11" r="3"/></svg>
+      </button>
+      <button id="hide" class="icon-button" aria-label="收起气泡" title="收起气泡">−</button>
+    </header>
+    <nav class="modes" aria-label="助手模式">
+      <button data-mode="codex" aria-pressed="true"><span aria-hidden="true">⌘</span> Codex <small>任务</small></button>
+      <button data-mode="chat" aria-pressed="false"><span aria-hidden="true">✧</span> 问答 <small>MiniMax</small></button>
+    </nav>
+    <section id="preferences" hidden aria-label="连接设置">
+      <h2>本机 Codex</h2><p id="connection-detail">沿用 Codex 当前的登录与配置。</p>
+      <div class="settings-actions"><button id="connect" class="secondary">连接 Codex</button><button id="choose-binary" class="secondary">选择程序</button></div>
+      <div class="settings-actions"><button id="install-hooks" class="secondary">接入已有会话</button><button id="uninstall-hooks" class="secondary" hidden>移除接入</button></div>
+      <p id="hooks-detail" class="small">接入后，需在 Codex 的 /hooks 中信任新增配置。</p>
+      <p id="hooks-error" class="small" hidden></p>
+    </section>
+    <section id="codex-context">
+      <div class="session-row"><span aria-hidden="true">▱</span><select id="sessions" aria-label="Codex 会话"><option value="">选择一个会话</option></select><button id="refresh" class="icon-button" title="刷新会话" aria-label="刷新会话">↻</button><button id="new-project" class="icon-button" title="选择项目，新建任务" aria-label="新建任务">＋</button></div>
+      <div class="phase-row"><span id="status-dot" class="status-dot"></span><span id="phase" role="status" aria-live="polite">还没有连接 Codex</span><small id="source"></small></div>
+      <ol id="plan" hidden></ol>
+    </section>
+    <section id="chat-context" hidden><span class="status-dot"></span><span>简单问答 · MiniMax 尚未接入</span></section>
+    <section id="conversation" aria-label="对话与授权">
+      <div id="empty"><span class="empty-symbol" aria-hidden="true">✧</span><h2 id="empty-title">把任务交给 Codex</h2><p id="empty-description">我帮你留意进度，需要你时轻轻提醒一下。</p><button id="empty-connect" class="secondary">连接本机 Codex ↗</button></div>
+      <div id="messages" aria-live="polite" aria-relevant="additions text"></div>
+      <details id="activity" hidden><summary>最近操作</summary><pre id="activity-detail"></pre></details>
+      <section id="approval" hidden aria-label="需要你的确认"></section>
+    </section>
+    <p id="notice" hidden role="alert"></p>
+    <form id="composer">
+      <label class="sr-only" for="message">给小黑的消息</label>
+      <textarea id="message" rows="2" placeholder="继续这项任务…" maxlength="30000" disabled></textarea>
+      <div class="composer-actions"><small>Shift + Enter 换行</small><button id="interrupt" type="button" class="icon-button" aria-label="停止当前轮" title="停止当前轮" disabled>▪</button><button id="send" type="submit" class="primary" aria-label="发送消息" disabled>↑</button></div>
+    </form>
+    <footer><span id="account-label">本机 Codex · 未连接</span><span>Enter 发送</span></footer>
+  </main>
+  <script src="controller.js"></script>
+</body>
+</html>

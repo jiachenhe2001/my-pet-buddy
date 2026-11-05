@@ -7,6 +7,8 @@ const DEFAULTS = Object.freeze({
   observerAction: 'auto',
   observerSize: 120,
   observerPaused: false,
-  observerPosition: null
+  observerPosition: null,
+  codexBinary: '',
+  codexAutoConnect: false
 });
 module.exports = { DEFAULTS };

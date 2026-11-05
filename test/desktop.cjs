@@ -5,7 +5,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, spawn } = require('node:child_process');
+const { assistantFlow } = require('./assistant-flow.cjs');
 
 async function main() {
     const source = path.resolve(__dirname, '..');
@@ -25,6 +26,7 @@ async function main() {
     let app, browser, context, popup, overlay;
     fs.mkdirSync(path.join(root, 'test/fixtures'), { recursive: true });
     fs.copyFileSync(path.join(__dirname, 'fixtures/desktop-main.cjs'), path.join(root, 'test/fixtures/desktop-main.cjs'));
+    fs.copyFileSync(path.join(__dirname, 'fixtures/codex-server.cjs'), path.join(root, 'test/fixtures/codex-server.cjs'));
     execFileSync(process.execPath, [path.join(root, 'desktop/scripts/copy-assets.js')]);
     fs.mkdirSync(artifacts, { recursive: true });
     try {
@@ -70,7 +72,8 @@ async function main() {
             const executablePath = require('../desktop/node_modules/electron');
             app = await electron.launch({ executablePath,
                 args: ['--no-sandbox', path.join(root, 'test/fixtures/desktop-main.cjs')],
-                env: { ...process.env, PET_BUDDY_TEST_PROFILE: profile }, timeout: 30000 });
+                env: { ...process.env, PET_BUDDY_TEST_PROFILE: profile, PET_BUDDY_TEST_PROJECT: root,
+                    CODEX_HOME: path.join(profile, 'codex'), PET_BUDDY_CODEX_BIN: path.join(root, 'test/fixtures/codex-server.cjs') }, timeout: 30000 });
             app.process().stdout.on('data', data => mainLog.push(data.toString()));
             app.process().stderr.on('data', data => mainLog.push(data.toString()));
             context = app.context();
@@ -202,6 +205,33 @@ async function main() {
         assert.deepEqual(errors, []); assert.deepEqual(network, [], 'no runtime HTTP requests');
         console.log('PASS: context menu sync, hide/restore, reset, registered characters, retired selection fallback, size, settings reload, and offline assets');
         console.log(emulate ? 'NOTE: browser-only IPC substitute; native Electron is verified separately in CI.' : 'PASS: real Electron preload, IPC, local storage, and native click-through API');
+        if (app) {
+            const assistant = app.windows().find(page => /\/assistant\/assistant.html$/.test(page.url()));
+            assert.ok(assistant, 'assistant uses a separate focusable native window');
+            const show = async () => {
+                await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(win => win.webContents.getURL().includes('/assistant/assistant.html')).show());
+                await assistant.bringToFront();
+            };
+            await show();
+            assert.equal(await assistant.evaluate(() => typeof require), 'undefined');
+            await assistantFlow(assistant, { artifacts, infoPath: path.join(profile, 'codex-hook-bridge.json'), cwd: root, show,
+                hookProcess: event => new Promise((resolve, reject) => {
+                    const child = spawn(require('../desktop/node_modules/electron'), ['--no-sandbox', path.join(root, 'desktop/main.js'), '--pet-buddy-hook', path.join(profile, 'codex-hook-bridge.json')], {
+                        env: { ...process.env, CODEX_HOME: path.join(profile, 'codex') }, stdio: ['pipe', 'pipe', 'pipe']
+                    });
+                    let output = '', logs = '';
+                    const timer = setTimeout(() => { child.kill(); reject(new Error('Native hook timed out: ' + logs)); }, 15000);
+                    child.stdout.on('data', data => { output += data; }); child.stderr.on('data', data => { logs += data; });
+                    child.on('error', error => { clearTimeout(timer); reject(error); });
+                    child.on('close', code => {
+                        clearTimeout(timer);
+                        try { assert.equal(code, 0, logs); resolve(JSON.parse(output)); } catch (error) { reject(error); }
+                    });
+                    child.stdin.end(JSON.stringify(event));
+                }) });
+            assert.deepEqual(errors, []); assert.deepEqual(network, []);
+            console.log('PASS: native assistant preload/IPC, stdio approvals, terminal hook executable, continued input and window hiding');
+        }
     } catch (error) {
         console.error('Renderer errors:', errors);
         if (app) console.error('Main process:', mainLog.join(''));
@@ -213,7 +243,8 @@ async function main() {
         }
         throw error;
     } finally {
-        await app?.close(); await browser?.close(); fs.rmSync(profile, { recursive: true, force: true }); fs.rmSync(root, { recursive: true, force: true });
+        if (app) await app.evaluate(({ app }) => app.exit(0)).catch(() => {});
+        await app?.close().catch(() => {}); await browser?.close(); fs.rmSync(profile, { recursive: true, force: true }); fs.rmSync(root, { recursive: true, force: true });
     }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

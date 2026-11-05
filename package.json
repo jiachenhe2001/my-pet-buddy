@@ -6,6 +6,7 @@
   "scripts": {
     "test": "node --test test/*.test.cjs",
     "test:browser": "node test/browser.cjs",
+    "test:assistant": "node test/assistant.cjs",
     "test:desktop": "node test/desktop.cjs"
   },
   "devDependencies": {

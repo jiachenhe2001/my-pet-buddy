@@ -1,4 +1,5 @@
-const { app, BrowserWindow, nativeTheme } = require('electron');
+const { app, dialog, Notification } = require('electron');
+const path = require('node:path');
 const { SettingsStore } = require('./src/store/SettingsStore');
 const { createElectronStoreBackend } = require('./src/store/electronStoreBackend');
 const { DEFAULTS } = require('./src/store/defaults');
@@ -7,6 +8,8 @@ const { SettingsWindowManager } = require('./src/windows/SettingsWindowManager')
 const { IpcRouter } = require('./src/ipc/IpcRouter');
 const { TrayController } = require('./src/tray/TrayController');
 const { LaunchAgent } = require('./src/system/LaunchAgent');
+const { AssistantWindowManager } = require('./src/windows/AssistantWindowManager');
+const { CodexService } = require('./src/codex/CodexService');
 
 class AppController {
   constructor() {
@@ -14,6 +17,7 @@ class AppController {
     this.overlay = new OverlayWindowManager();
     this.settingsWindow = new SettingsWindowManager();
     this.launchAgent = new LaunchAgent();
+    this.assistantWindow = new AssistantWindowManager();
   }
 
   start() {
@@ -21,6 +25,7 @@ class AppController {
     if (!gotLock) { app.quit(); return; }
 
     app.whenReady().then(() => {
+      if (process.platform === 'win32') app.setAppUserModelId('com.mypetbuddy.desktop');
       if (process.platform === 'darwin') {
         // Register as a menu-bar AGENT app: no Dock icon, and — crucially —
         // focusing our popover never "activates" the app onto its own Space,
@@ -32,6 +37,31 @@ class AppController {
 
       this.overlay.create();
       this.settingsWindow.create(); // pre-create the popover so it opens instantly & flicker-free
+      this.assistantWindow.create();
+      const hookCommand = app.isPackaged ? [process.execPath] : [process.execPath, path.join(__dirname, 'main.js')];
+      this.codex = new CodexService({ directory: app.getPath('userData'), hookCommand,
+        binary: this.store.get('codexBinary') || process.env.PET_BUDDY_CODEX_BIN || '' });
+      this.codex.on('change', snapshot => {
+        for (const win of [this.overlay.win, this.assistantWindow.win]) {
+          if (win && !win.isDestroyed()) win.webContents.send('assistant:changed', snapshot);
+        }
+      });
+      this.codex.on('attention', event => {
+        const needsInput = ['waiting_approval', 'waiting_input'].includes(event.type);
+        if (this.store.get('enabled')) {
+          this.codex.select(event.sessionId).catch(() => {});
+          this.assistantWindow.show({ focus: false });
+        }
+        if (Notification.isSupported() && !this.assistantWindow.win?.isFocused()) {
+          const notification = new Notification({ title: needsInput ? '小黑：需要你确认一下' : '小黑：Codex 有新状态',
+            body: event.message, silent: true, icon: path.join(__dirname, 'assets/icons/icon128.png') });
+          notification.on('click', () => { this.codex.select(event.sessionId).catch(() => {}); this.assistantWindow.show(); });
+          notification.show();
+        }
+      });
+      this.codex.start().then(() => {
+        if (this.store.get('codexAutoConnect')) this.codex.connect().catch(() => {});
+      });
 
       // Single source of truth for reacting to setting changes.
       this.store.on('change', (payload) => {
@@ -46,6 +76,7 @@ class AppController {
         //    was toggled from the tray menu or the popover's header switch.
         if (key === 'enabled') {
           value ? this.overlay.show() : this.overlay.hide();
+          if (!value) this.assistantWindow.hide();
         }
         // 3) launch-at-login reflects to the OS
         if (key === 'launchOnLogin') {
@@ -56,6 +87,8 @@ class AppController {
       const router = new IpcRouter({
         store: this.store,
         overlayManager: this.overlay,
+        assistantManager: this.assistantWindow,
+        assistantService: this.codex,
         onOpenSettings: () => this.settingsWindow.toggle(),
         onTogglePet: () => this._togglePet(),
       });
@@ -65,6 +98,7 @@ class AppController {
         store: this.store,
         onToggle: () => this._togglePet(),
         onOpenPanel: (bounds) => this.settingsWindow.toggle(bounds),
+        onOpenAssistant: () => this.assistantWindow.show(),
         onToggleLaunch: (checked) => this.store.set('launchOnLogin', checked),
         onQuit: () => app.quit(),
       });
@@ -78,6 +112,17 @@ class AppController {
     });
 
     app.on('window-all-closed', () => {}); // tray-resident; never auto-quit
+    app.on('before-quit', event => {
+      if (!this._quitting && this.codex?.hasActiveTasks()) {
+        event.preventDefault(); if (this._quitPrompt) return; this._quitPrompt = true;
+        dialog.showMessageBox({ type: 'question', title: 'Codex 仍有任务在运行', message: '退出桌宠会断开小黑控制的 Codex 任务。',
+          buttons: ['继续运行', '退出桌宠'], defaultId: 0, cancelId: 0 }).then(({ response }) => {
+          this._quitPrompt = false; if (response === 1) { this._quitting = true; app.quit(); }
+        });
+        return;
+      }
+      this._quitting = true; this.assistantWindow.closing = true; this.codex?.stop();
+    });
   }
 
   _togglePet() {
@@ -87,4 +132,7 @@ class AppController {
   }
 }
 
-new AppController().start();
+// The installed executable doubles as a hook client; no extra Node installation.
+const hookIndex = process.argv.indexOf('--pet-buddy-hook');
+if (hookIndex >= 0) require('./src/codex/hook-client').runHook(process.argv[hookIndex + 1]).finally(() => app.exit(0));
+else new AppController().start();

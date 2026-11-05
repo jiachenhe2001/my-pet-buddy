@@ -1,8 +1,9 @@
 // Isolate the smoke test profile and observe calls to the real native window API.
-const { app, BrowserWindow, screen } = require('electron');
+const { app, BrowserWindow, screen, dialog } = require('electron');
 app.setPath('userData', process.env.PET_BUDDY_TEST_PROFILE);
 process.on('uncaughtException', error => { console.error(error); app.exit(1); });
 process.on('unhandledRejection', error => { console.error(error); app.exit(1); });
+if (process.env.PET_BUDDY_TEST_PROJECT) dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [process.env.PET_BUDDY_TEST_PROJECT] });
 // CDP input doesn't move the OS cursor. Feed known coordinates to the normal
 // native cursor polling path while retaining the real native click-through API.
 app.whenReady().then(() => {

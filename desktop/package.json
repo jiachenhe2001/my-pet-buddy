@@ -36,6 +36,7 @@
       "preload.js",
       "src/**/*",
       "overlay/**/*",
+      "assistant/**/*",
       "settings/**/*",
       "assets/**/*",
       "!test/**",

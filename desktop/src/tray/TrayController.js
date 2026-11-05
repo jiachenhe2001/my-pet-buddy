@@ -8,10 +8,11 @@ const catalog = require('../../assets/pets');
 // The icon itself is the currently selected pet, so it reads well on light and
 // dark menu bars and reflects the user's choice.
 class TrayController {
-  constructor({ store, onToggle, onOpenPanel, onToggleLaunch, onQuit }) {
+  constructor({ store, onToggle, onOpenPanel, onOpenAssistant, onToggleLaunch, onQuit }) {
     this.store = store;
     this.onToggle = onToggle;
     this.onOpenPanel = onOpenPanel;
+    this.onOpenAssistant = onOpenAssistant;
     this.onToggleLaunch = onToggleLaunch;
     this.onQuit = onQuit;
     this.tray = null;
@@ -46,6 +47,7 @@ class TrayController {
   _contextMenu() {
     const enabled = this.store.get('enabled');
     return Menu.buildFromTemplate([
+      { label: '小黑助手…', click: () => this.onOpenAssistant?.() },
       { label: enabled ? 'Hide Pet' : 'Show Pet', click: () => this.onToggle() },
       { label: 'Settings…', click: () => this.onOpenPanel(this.tray.getBounds()) },
       { type: 'separator' },
